@@ -184,6 +184,12 @@
   <div class="layout">
     <div class="toolbar">
       <label><input id="compactMode" type="checkbox" /> Compact mode</label>
+      <label>Mode
+        <select id="layoutMode">
+          <option value="legacy" selected>Legacy</option>
+          <option value="tidy">Tidy</option>
+        </select>
+      </label>
       <label>Horizontal <input id="xOffset" type="number" min="0" value="30" /></label>
       <label>Vertical <input id="yOffset" type="number" min="50" value="70" /></label>
       <button id="rerun">Re-layout</button>
@@ -510,6 +516,97 @@
         layoutTree(child, childCenterX, y + actualYOffset, xOffset, yOffset, compactMode);
         startX += child.width + actualXOffset;
       }
+    }
+
+    function layoutTreeTidy(root, centerX, yStart, xGap, yGap) {
+      if (!root) return;
+
+      function build(node) {
+        const halfWidth = Math.floor(node.width / 2);
+        const layout = {
+          left: new Map([[0, -halfWidth]]),
+          right: new Map([[0, halfWidth]])
+        };
+
+        if (!node.children || node.children.length === 0) {
+          node._tidyChildOffset = 0;
+          return layout;
+        }
+
+        const placed = [];
+        const placedRight = new Map();
+
+        for (const child of node.children) {
+          const childLayout = build(child);
+          let shift = 0;
+
+          for (const [depth, childLeft] of childLayout.left.entries()) {
+            if (placedRight.has(depth)) {
+              const needed = placedRight.get(depth) + xGap - childLeft;
+              if (needed > shift) shift = needed;
+            }
+          }
+
+          for (const [depth, childRight] of childLayout.right.entries()) {
+            const value = childRight + shift;
+            const current = placedRight.get(depth);
+            if (current === undefined || value > current) {
+              placedRight.set(depth, value);
+            }
+          }
+
+          placed.push({ child, childLayout, shift });
+        }
+
+        const firstShift = placed[0].shift;
+        const lastShift = placed[placed.length - 1].shift;
+        const centerShift = (firstShift + lastShift) / 2;
+        for (const p of placed) {
+          p.shift -= centerShift;
+          p.child._tidyChildOffset = p.shift;
+        }
+
+        for (const p of placed) {
+          for (const [depth, l] of p.childLayout.left.entries()) {
+            const key = depth + 1;
+            const value = l + p.shift;
+            const current = layout.left.get(key);
+            if (current === undefined || value < current) {
+              layout.left.set(key, value);
+            }
+          }
+          for (const [depth, r] of p.childLayout.right.entries()) {
+            const key = depth + 1;
+            const value = r + p.shift;
+            const current = layout.right.get(key);
+            if (current === undefined || value > current) {
+              layout.right.set(key, value);
+            }
+          }
+        }
+
+        return layout;
+      }
+
+      function assign(node, absoluteCenterX, depth) {
+        node.position = {
+          x: Math.round(absoluteCenterX - (node.width / 2)),
+          y: yStart + (depth * yGap)
+        };
+        for (const child of node.children) {
+          assign(child, absoluteCenterX + (child._tidyChildOffset || 0), depth + 1);
+        }
+      }
+
+      build(root);
+      assign(root, centerX, 0);
+      cleanupTidyFields(root);
+    }
+
+    function cleanupTidyFields(node) {
+      if (!node) return;
+      delete node._tidyChildOffset;
+      for (const child of node.children) cleanupTidyFields(child);
     }
 
     function isSimpleSubtree(node) {
@@ -1107,12 +1204,17 @@
 
     function run(root, recenter = false, recomputeLayout = true) {
       const compactMode = document.getElementById("compactMode").checked;
+      const layoutMode = document.getElementById("layoutMode").value;
       const xOffset = Number(document.getElementById("xOffset").value || 30);
       const yOffset = Number(document.getElementById("yOffset").value || 70);
       const svg = document.getElementById("treeSvg");
       if (recomputeLayout) {
-        layoutTree(root, 600, 50, xOffset, yOffset, compactMode);
-        adjustOffsets(root, xOffset);
+        if (layoutMode === "tidy") {
+          layoutTreeTidy(root, 600, 50, xOffset, yOffset);
+        } else {
+          layoutTree(root, 600, 50, xOffset, yOffset, compactMode);
+          adjustOffsets(root, xOffset);
+        }
         ensureTreeInBounds(root, 20, 20, 100000, 100000);
       }
 
@@ -1131,7 +1233,7 @@
 
       const meta = drawTree(svg, root, offsetX, offsetY);
       document.getElementById("meta").textContent =
-        `compactMode=${compactMode} xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight} zoom=${Math.round(zoomScale * 100)}%`;
+        `mode=${layoutMode} compactMode=${compactMode} xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight} zoom=${Math.round(zoomScale * 100)}%`;
 
       IfNeededCenter(recenter);
     }
@@ -1231,6 +1333,7 @@
 
     document.getElementById("rerun").addEventListener("click", rerenderCurrent);
     document.getElementById("addChildBtn").addEventListener("click", addChildBelowSelected);
+    document.getElementById("layoutMode").addEventListener("change", () => run(currentRoot, true, true));
     document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomScale + zoomStep));
     document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomScale - zoomStep));
     document.getElementById("zoomResetBtn").addEventListener("click", () => setZoom(1));
