@@ -5,7 +5,21 @@ Public Class frmAnalyze
     Private selectedNode As WNode
 
     Private Sub frmAnalyze_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        ' Form initialization
+        Dim args = Environment.GetCommandLineArgs()
+        Dim runSmokeTest As Boolean = False
+        For Each arg In args
+            If String.Equals(arg, "--tree-smoke-test", StringComparison.OrdinalIgnoreCase) Then
+                runSmokeTest = True
+                Exit For
+            End If
+        Next
+
+        If runSmokeTest Then
+            Dim report = modTreeHarness.RunTreeLayoutSmokeTest(pnlCanvas.Width, pnlCanvas.Height, chkCompactMode.Checked)
+            MessageBox.Show(report, "Tree Smoke Test", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Me.Close()
+            Return
+        End If
     End Sub
 
     Private Sub btnAddRoot_Click(sender As Object, e As EventArgs) Handles btnAddRoot.Click
@@ -31,14 +45,14 @@ Public Class frmAnalyze
         ' Clear the canvas first
         e.Graphics.Clear(pnlCanvas.BackColor)
 
-        ' Set better default spacing values
-        Dim horizontalSpacing As Integer = 30 ' Space between sibling nodes
-        Dim verticalSpacing As Integer = 70   ' Space between parent and child nodes
+        ' Set spacing values based on compact mode - much tighter horizontal packing
+        Dim horizontalSpacing As Integer = If(chkCompactMode.Checked, 8, 30)
+        Dim verticalSpacing As Integer = If(chkCompactMode.Checked, 55, 70)
 
         ' Calculate initial layout
-        modTree.LayoutTree(root, pnlCanvas.Width \ 2, 50, horizontalSpacing, verticalSpacing)
+        modTree.LayoutTree(root, pnlCanvas.Width \ 2, 50, horizontalSpacing, verticalSpacing, chkCompactMode.Checked)
 
-        ' Adjust for overlaps - this is the key step that was failing before
+        ' Adjust for overlaps
         modTree.AdjustOffsets(root, horizontalSpacing)
 
         ' Make sure the entire tree is visible within the panel
@@ -129,4 +143,9 @@ Public Class frmAnalyze
 
         Return Nothing
     End Function
+
+    Private Sub chkCompactMode_CheckedChanged(sender As Object, e As EventArgs) Handles chkCompactMode.CheckedChanged
+        ' Redraw the tree when compact mode is toggled
+        pnlCanvas.Invalidate()
+    End Sub
 End Class

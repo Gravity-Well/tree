@@ -15,6 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="TreeApp3.Cli\**\*.vb" />
+    <EmbeddedResource Remove="TreeApp3.Cli\**\*" />
+    <None Remove="TreeApp3.Cli\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Update="My Project\Application.Designer.vb">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
