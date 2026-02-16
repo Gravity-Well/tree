@@ -161,6 +161,10 @@
       cursor: pointer;
     }
 
+    .node-delete {
+      cursor: pointer;
+    }
+
     .node-editor {
       width: 100%;
       height: 100%;
@@ -183,13 +187,6 @@
 <body>
   <div class="layout">
     <div class="toolbar">
-      <label><input id="compactMode" type="checkbox" /> Compact mode</label>
-      <label>Mode
-        <select id="layoutMode">
-          <option value="legacy">Legacy</option>
-          <option value="tidy" selected>Tidy</option>
-        </select>
-      </label>
       <label>Horizontal <input id="xOffset" type="number" min="0" value="30" /></label>
       <label>Vertical <input id="yOffset" type="number" min="50" value="70" /></label>
       <button id="rerun">Re-layout</button>
@@ -1158,6 +1155,37 @@
         plusText.textContent = "+";
         group.appendChild(plusText);
 
+        if (node.parent) {
+          const deleteCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          deleteCircle.setAttribute("class", "node-delete");
+          deleteCircle.setAttribute("cx", String(node.position.x + 10 + offsetX));
+          deleteCircle.setAttribute("cy", String(node.position.y + 10 + offsetY));
+          deleteCircle.setAttribute("r", "9");
+          deleteCircle.setAttribute("fill", "#ffffff");
+          deleteCircle.setAttribute("stroke", "#b42318");
+          deleteCircle.setAttribute("stroke-width", "2");
+          group.appendChild(deleteCircle);
+
+          const deleteText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          deleteText.setAttribute("class", "node-delete");
+          deleteText.setAttribute("x", String(node.position.x + 10 + offsetX));
+          deleteText.setAttribute("y", String(node.position.y + 14 + offsetY));
+          deleteText.setAttribute("font-size", "14");
+          deleteText.setAttribute("font-weight", "700");
+          deleteText.setAttribute("text-anchor", "middle");
+          deleteText.setAttribute("fill", "#b42318");
+          deleteText.textContent = "×";
+          group.appendChild(deleteText);
+
+          const deleteFromNode = (e) => {
+            e.stopPropagation();
+            if (suppressNodeClick) return;
+            deleteNode(node);
+          };
+          deleteCircle.addEventListener("click", deleteFromNode);
+          deleteText.addEventListener("click", deleteFromNode);
+        }
+
         group.addEventListener("click", (e) => {
           e.stopPropagation();
           if (suppressNodeClick) return;
@@ -1203,18 +1231,11 @@
     }
 
     function run(root, recenter = false, recomputeLayout = true) {
-      const compactMode = document.getElementById("compactMode").checked;
-      const layoutMode = document.getElementById("layoutMode").value;
       const xOffset = Number(document.getElementById("xOffset").value || 30);
       const yOffset = Number(document.getElementById("yOffset").value || 70);
       const svg = document.getElementById("treeSvg");
       if (recomputeLayout) {
-        if (layoutMode === "tidy") {
-          layoutTreeTidy(root, 600, 50, xOffset, yOffset);
-        } else {
-          layoutTree(root, 600, 50, xOffset, yOffset, compactMode);
-          adjustOffsets(root, xOffset);
-        }
+        layoutTreeTidy(root, 600, 50, xOffset, yOffset);
         ensureTreeInBounds(root, 20, 20, 100000, 100000);
       }
 
@@ -1233,7 +1254,7 @@
 
       const meta = drawTree(svg, root, offsetX, offsetY);
       document.getElementById("meta").textContent =
-        `mode=${layoutMode} compactMode=${compactMode} xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight} zoom=${Math.round(zoomScale * 100)}%`;
+        `mode=tidy xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight} zoom=${Math.round(zoomScale * 100)}%`;
 
       IfNeededCenter(recenter);
     }
@@ -1331,9 +1352,28 @@
       input.value = "";
     }
 
+    function deleteNode(node) {
+      clearError();
+      if (!node) return;
+      if (!node.parent) {
+        setError("Root node cannot be deleted.");
+        return;
+      }
+
+      if (editingNode) {
+        const active = document.getElementById("activeNodeEditor");
+        commitNodeEdit(active ? active.value : editingNode.label);
+      }
+
+      const parent = node.parent;
+      parent.children = parent.children.filter((c) => c !== node);
+      selectNode(parent, false);
+      syncJsonFromTree();
+      run(currentRoot, false);
+    }
+
     document.getElementById("rerun").addEventListener("click", rerenderCurrent);
     document.getElementById("addChildBtn").addEventListener("click", addChildBelowSelected);
-    document.getElementById("layoutMode").addEventListener("change", () => run(currentRoot, true, true));
     document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomScale + zoomStep));
     document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomScale - zoomStep));
     document.getElementById("zoomResetBtn").addEventListener("click", () => setZoom(1));
