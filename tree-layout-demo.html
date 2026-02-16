@@ -642,6 +642,8 @@
 
       alignNestedColumns(node);
 
+      enforceSiblingNodeGap(node, minOffset);
+
       centerParentAboveChildren(node);
     }
 
@@ -680,6 +682,25 @@
               shiftSubtree(rightChild, overlap);
               changed = true;
             }
+          }
+        }
+      } while (changed);
+    }
+
+    function enforceSiblingNodeGap(node, minOffset) {
+      if (!node || node.children.length <= 1) return;
+
+      let changed;
+      do {
+        changed = false;
+        for (let i = 1; i < node.children.length; i++) {
+          const leftChild = node.children[i - 1];
+          const rightChild = node.children[i];
+          const requiredGap = getDynamicMinOffset(leftChild, rightChild, minOffset);
+          const currentGap = rightChild.position.x - (leftChild.position.x + leftChild.width);
+          if (currentGap < requiredGap) {
+            shiftSubtree(rightChild, requiredGap - currentGap);
+            changed = true;
           }
         }
       } while (changed);

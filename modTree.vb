@@ -131,6 +131,9 @@ Module modTree
         ' Apply tight column alignment across adjacent sibling subtrees
         AlignNestedColumns(node)
 
+        ' Final direct-sibling safety pass to prevent any residual intersections.
+        EnforceSiblingNodeGap(node, minOffset)
+
         ' Center parent above children if needed
         CenterParentAboveChildren(node)
     End Sub
@@ -205,6 +208,25 @@ Module modTree
                         changed = True
                     End If
                 Next
+            Next
+        Loop While changed
+    End Sub
+
+    Private Sub EnforceSiblingNodeGap(node As WNode, minOffset As Integer)
+        If node Is Nothing OrElse node.Children.Count <= 1 Then Return
+
+        Dim changed As Boolean
+        Do
+            changed = False
+            For i = 1 To node.Children.Count - 1
+                Dim leftChild = node.Children(i - 1)
+                Dim rightChild = node.Children(i)
+                Dim requiredGap = GetDynamicMinOffset(leftChild, rightChild, minOffset)
+                Dim currentGap = rightChild.Position.X - (leftChild.Position.X + leftChild.Width)
+                If currentGap < requiredGap Then
+                    ShiftSubtree(rightChild, requiredGap - currentGap)
+                    changed = True
+                End If
             Next
         Loop While changed
     End Sub
