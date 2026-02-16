@@ -165,6 +165,10 @@
       cursor: pointer;
     }
 
+    .node-toggle {
+      cursor: pointer;
+    }
+
     .node-editor {
       width: 100%;
       height: 100%;
@@ -221,6 +225,7 @@
         this.label = label;
         this.parent = parent;
         this.children = [];
+        this.expanded = true;
         this.position = { x: 0, y: 0 };
         this.width = 100;
         this.height = 50;
@@ -469,6 +474,7 @@
       const node = new WNode(data.label.trim(), parent);
       if (Number.isInteger(data.width) && data.width > 0) node.width = data.width;
       if (Number.isInteger(data.height) && data.height > 0) node.height = data.height;
+      if (typeof data.expanded === "boolean") node.expanded = data.expanded;
 
       if (data.children !== undefined) {
         if (!Array.isArray(data.children)) {
@@ -525,7 +531,8 @@
           right: new Map([[0, halfWidth]])
         };
 
-        if (!node.children || node.children.length === 0) {
+        const visibleChildren = getVisibleChildren(node);
+        if (!visibleChildren || visibleChildren.length === 0) {
           node._tidyChildOffset = 0;
           return layout;
         }
@@ -533,7 +540,7 @@
         const placed = [];
         const placedRight = new Map();
 
-        for (const child of node.children) {
+        for (const child of visibleChildren) {
           const childLayout = build(child);
           let shift = 0;
 
@@ -590,7 +597,7 @@
           x: Math.round(absoluteCenterX - (node.width / 2)),
           y: yStart + (depth * yGap)
         };
-        for (const child of node.children) {
+        for (const child of getVisibleChildren(node)) {
           assign(child, absoluteCenterX + (child._tidyChildOffset || 0), depth + 1);
         }
       }
@@ -629,7 +636,7 @@
     function getRightmostEdge(node) {
       if (!node) return 0;
       let right = node.position.x + node.width;
-      for (const child of node.children) right = Math.max(right, getRightmostEdge(child));
+      for (const child of getVisibleChildren(node)) right = Math.max(right, getRightmostEdge(child));
       return right;
     }
 
@@ -666,7 +673,7 @@
     function getLeftmostEdge(node) {
       if (!node) return Number.MAX_SAFE_INTEGER;
       let left = node.position.x;
-      for (const child of node.children) left = Math.min(left, getLeftmostEdge(child));
+      for (const child of getVisibleChildren(node)) left = Math.min(left, getLeftmostEdge(child));
       return left;
     }
 
@@ -897,7 +904,7 @@
       (function walk(node) {
         if (!node) return;
         out.push(node);
-        for (const c of node.children) walk(c);
+        for (const c of getVisibleChildren(node)) walk(c);
       })(root);
       return out;
     }
@@ -906,8 +913,18 @@
       if (!node) return null;
       return {
         label: node.label,
+        expanded: node.expanded !== false,
         children: node.children.map((child) => serializeTree(child))
       };
+    }
+
+    function getVisibleChildren(node) {
+      if (!node || !node.children) return [];
+      return node.expanded === false ? [] : node.children;
+    }
+
+    function hasChildren(node) {
+      return !!(node && node.children && node.children.length > 0);
     }
 
     function syncJsonFromTree() {
@@ -1036,7 +1053,7 @@
       let lineCount = 0;
 
       for (const node of nodes) {
-        for (const child of node.children) {
+        for (const child of getVisibleChildren(node)) {
           const startX = node.position.x + Math.floor(node.width / 2);
           const startY = node.position.y + node.height;
           const endX = child.position.x + Math.floor(child.width / 2);
@@ -1154,6 +1171,39 @@
         plusText.setAttribute("fill", "#0f766e");
         plusText.textContent = "+";
         group.appendChild(plusText);
+
+        if (hasChildren(node)) {
+          const toggleCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          toggleCircle.setAttribute("class", "node-toggle");
+          toggleCircle.setAttribute("cx", String(node.position.x + Math.floor(node.width / 2) + offsetX));
+          toggleCircle.setAttribute("cy", String(node.position.y + node.height - 8 + offsetY));
+          toggleCircle.setAttribute("r", "8");
+          toggleCircle.setAttribute("fill", "#ffffff");
+          toggleCircle.setAttribute("stroke", "#334e68");
+          toggleCircle.setAttribute("stroke-width", "2");
+          group.appendChild(toggleCircle);
+
+          const toggleText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          toggleText.setAttribute("class", "node-toggle");
+          toggleText.setAttribute("x", String(node.position.x + Math.floor(node.width / 2) + offsetX));
+          toggleText.setAttribute("y", String(node.position.y + node.height - 4 + offsetY));
+          toggleText.setAttribute("font-size", "12");
+          toggleText.setAttribute("font-weight", "700");
+          toggleText.setAttribute("text-anchor", "middle");
+          toggleText.setAttribute("fill", "#334e68");
+          toggleText.textContent = node.expanded === false ? "+" : "-";
+          group.appendChild(toggleText);
+
+          const toggleNode = (e) => {
+            e.stopPropagation();
+            if (suppressNodeClick) return;
+            node.expanded = node.expanded === false ? true : false;
+            syncJsonFromTree();
+            run(currentRoot, false, true);
+          };
+          toggleCircle.addEventListener("click", toggleNode);
+          toggleText.addEventListener("click", toggleNode);
+        }
 
         if (node.parent) {
           const deleteCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -1345,6 +1395,7 @@
 
       const child = new WNode(label, parentNode);
       parentNode.children.push(child);
+      parentNode.expanded = true;
       selectNode(child, false);
 
       syncJsonFromTree();
