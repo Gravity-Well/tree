@@ -261,13 +261,10 @@
         <div class="toolbar-actions">
           <button id="newTreeBtn" class="btn-primary">New Tree</button>
           <button id="loadSample">Load Sample</button>
-          <button id="loadPackedSample">Load Packed Sample</button>
-          <button id="rerun">Re-layout</button>
+          <button id="loadPackedSample">Load Packed</button>
         </div>
       </div>
       <div class="toolbar-secondary">
-        <label>Child label <input id="newChildLabel" type="text" placeholder="auto" /></label>
-        <button id="addChildBtn">Add Child Below Selected</button>
         <button id="expandAllBtn" class="btn-subtle">Expand All</button>
         <button id="collapseAllBtn" class="btn-subtle">Collapse All</button>
         <button id="zoomOutBtn" class="btn-subtle">-</button>
@@ -285,6 +282,7 @@
         <label>Horizontal <input id="xOffset" type="number" min="0" value="30" /></label>
         <label>Vertical <input id="yOffset" type="number" min="50" value="70" /></label>
         <button id="loadJson">Apply JSON</button>
+        <button id="rerun">Re-layout</button>
       </div>
       <textarea id="jsonInput" aria-label="Tree JSON"></textarea>
       <div id="error" class="error"></div>
@@ -1581,9 +1579,7 @@
         commitNodeEdit(active ? active.value : editingNode.label);
       }
 
-      const input = document.getElementById("newChildLabel");
-      const rawLabel = input.value.trim();
-      const label = rawLabel === "" ? getAutoChildLabel(parentNode) : rawLabel;
+      const label = getAutoChildLabel(parentNode);
 
       const child = new WNode(label, parentNode);
       parentNode.children.push(child);
@@ -1592,7 +1588,6 @@
 
       syncJsonFromTree();
       run(currentRoot, false);
-      input.value = "";
     }
 
     function deleteNode(node) {
@@ -1644,13 +1639,9 @@
     document.getElementById("newTreeBtn").addEventListener("click", newTree);
     document.getElementById("expandAllBtn").addEventListener("click", expandAll);
     document.getElementById("collapseAllBtn").addEventListener("click", collapseAll);
-    document.getElementById("addChildBtn").addEventListener("click", addChildBelowSelected);
     document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomScale + zoomStep));
     document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomScale - zoomStep));
     document.getElementById("zoomResetBtn").addEventListener("click", () => setZoom(1));
-    document.getElementById("newChildLabel").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") addChildBelowSelected();
-    });
     document.getElementById("loadJson").addEventListener("click", loadJsonTree);
     document.getElementById("loadSample").addEventListener("click", () => {
       clearError();
