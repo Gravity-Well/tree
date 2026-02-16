@@ -6,15 +6,16 @@
   <title>Tree Layout Demo</title>
   <style>
     :root {
-      --bg: #eef2f3;
+      --bg: #edf3f5;
       --panel: #ffffff;
-      --ink: #122632;
-      --muted: #4f6472;
-      --line: #718096;
-      --node: #d7e9f4;
-      --node-border: #245b7a;
-      --accent: #0d7a76;
+      --ink: #13273a;
+      --muted: #4a6170;
+      --line: #7b8fa3;
+      --node-border: #2e5f87;
+      --accent: #0f766e;
       --accent-dark: #0b5f5d;
+      --btn-muted: #3f617a;
+      --btn-muted-dark: #355167;
       --danger: #b42318;
     }
 
@@ -22,7 +23,8 @@
     body {
       margin: 0;
       font-family: "Segoe UI", Tahoma, sans-serif;
-      background: linear-gradient(180deg, #ecf2f5 0%, #f8fbfc 100%);
+      background:
+        radial-gradient(circle at 16% 12%, #f7fbfd 0%, #edf4f7 38%, #e7eef2 100%);
       color: var(--ink);
       min-height: 100vh;
     }
@@ -178,7 +180,11 @@
     }
 
     .btn-subtle {
-      background: #45637a;
+      background: var(--btn-muted);
+    }
+
+    .btn-subtle:hover {
+      background: var(--btn-muted-dark);
     }
 
     .canvas-wrap {
@@ -200,7 +206,7 @@
       height: 700px;
       display: block;
       background:
-        radial-gradient(circle at 20% 20%, #f4fafc 0%, #f8fcfd 55%, #ffffff 100%);
+        radial-gradient(circle at 20% 20%, #f3f9fc 0%, #f8fcfd 58%, #ffffff 100%);
     }
 
     .meta {
@@ -1129,6 +1135,28 @@
       return lines.length === 0 ? [""] : lines;
     }
 
+    function getNodeDepth(node) {
+      let d = 0;
+      let current = node;
+      while (current && current.parent) {
+        d++;
+        current = current.parent;
+      }
+      return d;
+    }
+
+    function getNodeFillByDepth(node) {
+      const palette = [
+        "#d7ecfa",
+        "#dff4ec",
+        "#f6ecd8",
+        "#eadff7",
+        "#f9e0e0",
+        "#dfeaf8"
+      ];
+      return palette[getNodeDepth(node) % palette.length];
+    }
+
     function updateZoomInfo() {
       document.getElementById("zoomInfo").textContent = `zoom=${Math.round(zoomScale * 100)}%`;
     }
@@ -1262,7 +1290,7 @@
         rect.setAttribute("ry", "8");
         rect.setAttribute("width", String(node.width));
         rect.setAttribute("height", String(node.height));
-        rect.setAttribute("fill", node === selectedNode ? "#ffe1a8" : "var(--node)");
+        rect.setAttribute("fill", node === selectedNode ? "#ffe2a6" : getNodeFillByDepth(node));
         rect.setAttribute("stroke", node === selectedNode ? "#8a5a14" : "var(--node-border)");
         rect.setAttribute("stroke-width", node === selectedNode ? "3" : "2");
         group.appendChild(rect);
