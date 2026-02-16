@@ -134,11 +134,6 @@ Module modTree
         ' Final direct-sibling safety pass to prevent any residual intersections.
         EnforceSiblingNodeGap(node, minOffset)
 
-        ' Root-only global same-row safety pass for cousin branch overlaps.
-        If node.Parent Is Nothing Then
-            EnforceGlobalRowGap(node, minOffset)
-        End If
-
         ' Center parent above children if needed
         CenterParentAboveChildren(node)
     End Sub
@@ -235,62 +230,6 @@ Module modTree
             Next
         Loop While changed
     End Sub
-
-    Private Sub EnforceGlobalRowGap(root As WNode, minOffset As Integer)
-        If root Is Nothing Then Return
-
-        Dim pass As Integer = 0
-        Dim changed As Boolean
-        Do
-            pass += 1
-            changed = False
-
-            Dim allNodes As New List(Of WNode)
-            CollectNodes(root, allNodes)
-
-            Dim rows = allNodes.GroupBy(Function(n) n.Position.Y)
-            For Each row In rows
-                Dim sorted = row.OrderBy(Function(n) n.Position.X).ToList()
-                For i = 1 To sorted.Count - 1
-                    Dim leftNode = sorted(i - 1)
-                    Dim rightNode = sorted(i)
-                    Dim gap = rightNode.Position.X - (leftNode.Position.X + leftNode.Width)
-                    If gap < minOffset Then
-                        Dim shiftAmount = minOffset - gap
-                        Dim anchor = GetTopLevelChild(root, rightNode)
-                        If anchor Is Nothing OrElse anchor Is root Then
-                            anchor = rightNode
-                        End If
-                        ShiftSubtree(anchor, shiftAmount)
-                        changed = True
-                    End If
-                Next
-            Next
-        Loop While changed AndAlso pass < 20
-    End Sub
-
-    Private Sub CollectNodes(node As WNode, output As List(Of WNode))
-        If node Is Nothing Then Return
-        output.Add(node)
-        For Each child In node.Children
-            CollectNodes(child, output)
-        Next
-    End Sub
-
-    Private Function GetTopLevelChild(root As WNode, node As WNode) As WNode
-        If root Is Nothing OrElse node Is Nothing Then Return Nothing
-
-        Dim current = node
-        While current.Parent IsNot Nothing AndAlso current.Parent IsNot root
-            current = current.Parent
-        End While
-
-        If current.Parent Is root Then
-            Return current
-        End If
-
-        Return Nothing
-    End Function
 
     Private Sub AlignNestedColumns(node As WNode)
         If node Is Nothing OrElse node.Children.Count <= 1 Then Return
