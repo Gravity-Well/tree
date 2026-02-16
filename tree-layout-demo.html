@@ -1115,21 +1115,33 @@
       IfNeededCenter(recenter);
     }
 
-    function setZoom(newZoom) {
+    function applyZoom(newZoom, anchorClientX, anchorClientY) {
       const viewport = document.getElementById("treeViewport");
       const oldZoom = zoomScale;
       const targetZoom = clampZoom(newZoom);
       if (Math.abs(targetZoom - oldZoom) < 0.001) return;
 
-      const centerX = viewport.scrollLeft + (viewport.clientWidth / 2);
-      const centerY = viewport.scrollTop + (viewport.clientHeight / 2);
+      const rect = viewport.getBoundingClientRect();
+      const anchorXInViewport = anchorClientX - rect.left;
+      const anchorYInViewport = anchorClientY - rect.top;
+      const contentX = viewport.scrollLeft + anchorXInViewport;
+      const contentY = viewport.scrollTop + anchorYInViewport;
+
       zoomScale = targetZoom;
       updateZoomInfo();
       run(currentRoot, false, false);
 
       const ratio = targetZoom / oldZoom;
-      viewport.scrollLeft = Math.max(0, (centerX * ratio) - (viewport.clientWidth / 2));
-      viewport.scrollTop = Math.max(0, (centerY * ratio) - (viewport.clientHeight / 2));
+      viewport.scrollLeft = Math.max(0, (contentX * ratio) - anchorXInViewport);
+      viewport.scrollTop = Math.max(0, (contentY * ratio) - anchorYInViewport);
+    }
+
+    function setZoom(newZoom) {
+      const viewport = document.getElementById("treeViewport");
+      const rect = viewport.getBoundingClientRect();
+      const centerClientX = rect.left + (viewport.clientWidth / 2);
+      const centerClientY = rect.top + (viewport.clientHeight / 2);
+      applyZoom(newZoom, centerClientX, centerClientY);
     }
 
     function IfNeededCenter(recenter) {
@@ -1263,6 +1275,13 @@
           window.setTimeout(() => { suppressNodeClick = false; }, 0);
         }
       });
+
+      viewport.addEventListener("wheel", (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const direction = e.deltaY > 0 ? -1 : 1;
+        applyZoom(zoomScale + (direction * zoomStep), e.clientX, e.clientY);
+      }, { passive: false });
     })();
   </script>
 </body>
