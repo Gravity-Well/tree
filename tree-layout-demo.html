@@ -194,6 +194,8 @@
       <label>Horizontal <input id="xOffset" type="number" min="0" value="30" /></label>
       <label>Vertical <input id="yOffset" type="number" min="50" value="70" /></label>
       <button id="rerun">Re-layout</button>
+      <button id="expandAllBtn">Expand All</button>
+      <button id="collapseAllBtn">Collapse All</button>
       <label>Child label <input id="newChildLabel" type="text" placeholder="auto" /></label>
       <button id="addChildBtn">Add Child Below Selected</button>
       <button id="zoomOutBtn">-</button>
@@ -1508,7 +1510,34 @@
       run(currentRoot, false);
     }
 
+    function setExpandedRecursive(node, expanded) {
+      if (!node) return;
+      if (hasChildren(node)) {
+        node.expanded = expanded;
+      }
+      for (const child of node.children) {
+        setExpandedRecursive(child, expanded);
+      }
+    }
+
+    function expandAll() {
+      clearError();
+      setExpandedRecursive(currentRoot, true);
+      syncJsonFromTree();
+      run(currentRoot, false, true);
+    }
+
+    function collapseAll() {
+      clearError();
+      setExpandedRecursive(currentRoot, false);
+      if (currentRoot) currentRoot.expanded = true;
+      syncJsonFromTree();
+      run(currentRoot, false, true);
+    }
+
     document.getElementById("rerun").addEventListener("click", rerenderCurrent);
+    document.getElementById("expandAllBtn").addEventListener("click", expandAll);
+    document.getElementById("collapseAllBtn").addEventListener("click", collapseAll);
     document.getElementById("addChildBtn").addEventListener("click", addChildBelowSelected);
     document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomScale + zoomStep));
     document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomScale - zoomStep));
