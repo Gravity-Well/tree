@@ -156,6 +156,28 @@
     .node-group {
       cursor: pointer;
     }
+
+    .node-plus {
+      cursor: pointer;
+    }
+
+    .node-editor {
+      width: 100%;
+      height: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      padding: 0;
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      line-height: 1.1;
+      resize: none;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
@@ -167,6 +189,10 @@
       <button id="rerun">Re-layout</button>
       <label>Child label <input id="newChildLabel" type="text" placeholder="auto" /></label>
       <button id="addChildBtn">Add Child Below Selected</button>
+      <button id="zoomOutBtn">-</button>
+      <button id="zoomInBtn">+</button>
+      <button id="zoomResetBtn">100%</button>
+      <span id="zoomInfo" class="selected-info">zoom=100%</span>
       <span id="selectedInfo" class="selected-info">selected=(none)</span>
     </div>
 
@@ -201,6 +227,12 @@
     let currentRoot = null;
     let selectedNode = null;
     let suppressNodeClick = false;
+    let editingNode = null;
+    let editingOriginalLabel = "";
+    let zoomScale = 1;
+    const minZoom = 0.4;
+    const maxZoom = 2.5;
+    const zoomStep = 0.1;
 
     function addChild(parent, label) {
       const c = new WNode(label, parent);
@@ -763,6 +795,53 @@
       };
     }
 
+    function syncJsonFromTree() {
+      document.getElementById("jsonInput").value = JSON.stringify(serializeTree(currentRoot), null, 2);
+    }
+
+    function getMeasureContext() {
+      if (!getMeasureContext.ctx) {
+        const c = document.createElement("canvas");
+        getMeasureContext.ctx = c.getContext("2d");
+      }
+      return getMeasureContext.ctx;
+    }
+
+    function splitLabelLines(text) {
+      return String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+    }
+
+    function fitLineToNodeWidth(line, node) {
+      const maxTextWidth = Math.max(20, node.width - 16);
+      const ctx = getMeasureContext();
+      ctx.font = "600 12px Segoe UI";
+      let fitted = line;
+      while (fitted.length > 0 && ctx.measureText(fitted).width > maxTextWidth) {
+        fitted = fitted.slice(0, -1);
+      }
+      return fitted;
+    }
+
+    function sanitizeLabelForNode(text, node) {
+      const rawLines = splitLabelLines(text).slice(0, 3);
+      const fitted = rawLines.map((line) => fitLineToNodeWidth(line, node));
+      return fitted.join("\n");
+    }
+
+    function getRenderLines(node) {
+      const sanitized = sanitizeLabelForNode(node.label, node);
+      const lines = splitLabelLines(sanitized).slice(0, 3);
+      return lines.length === 0 ? [""] : lines;
+    }
+
+    function updateZoomInfo() {
+      document.getElementById("zoomInfo").textContent = `zoom=${Math.round(zoomScale * 100)}%`;
+    }
+
+    function clampZoom(value) {
+      return Math.max(minZoom, Math.min(maxZoom, value));
+    }
+
     function getAutoChildLabel(parent) {
       return `${parent.label}${parent.children.length + 1}`;
     }
@@ -775,7 +854,48 @@
     function selectNode(node, rerender = true) {
       selectedNode = node;
       updateSelectedInfo();
+      onNodeSelected(node);
       if (rerender) run(currentRoot, false);
+    }
+
+    function startNodeEdit(node) {
+      if (!node) return;
+      selectNode(node, false);
+      editingNode = node;
+      editingOriginalLabel = node.label;
+      run(currentRoot, false);
+      window.requestAnimationFrame(() => {
+        const editor = document.getElementById("activeNodeEditor");
+        if (editor) {
+          editor.focus();
+          editor.select();
+        }
+      });
+    }
+
+    function commitNodeEdit(newValue) {
+      if (!editingNode) return;
+      editingNode.label = sanitizeLabelForNode((newValue || "").trim(), editingNode);
+      if (editingNode.label === "") {
+        editingNode.label = editingOriginalLabel;
+      }
+      editingNode = null;
+      editingOriginalLabel = "";
+      syncJsonFromTree();
+      run(currentRoot, false);
+    }
+
+    function cancelNodeEdit() {
+      if (!editingNode) return;
+      editingNode = null;
+      editingOriginalLabel = "";
+      run(currentRoot, false);
+    }
+
+    function onNodeSelected(node) {
+      window.dispatchEvent(new CustomEvent("tree-node-selected", {
+        detail: { node }
+      }));
     }
 
     function getTreeBounds(root) {
@@ -795,7 +915,7 @@
       return { minX, minY, maxX, maxY };
     }
 
-    function drawTree(svg, root) {
+    function drawTree(svg, root, offsetX = 0, offsetY = 0) {
       svg.innerHTML = "";
       const nodes = flatten(root);
       let lineCount = 0;
@@ -809,7 +929,7 @@
           const midY = startY + Math.floor((endY - startY) / 2);
 
           const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          path.setAttribute("d", `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`);
+          path.setAttribute("d", `M ${startX + offsetX} ${startY + offsetY} L ${startX + offsetX} ${midY + offsetY} L ${endX + offsetX} ${midY + offsetY} L ${endX + offsetX} ${endY + offsetY}`);
           path.setAttribute("fill", "none");
           path.setAttribute("stroke", "var(--line)");
           path.setAttribute("stroke-width", "2");
@@ -823,8 +943,8 @@
         group.setAttribute("class", "node-group");
 
         const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.setAttribute("x", String(node.position.x));
-        rect.setAttribute("y", String(node.position.y));
+        rect.setAttribute("x", String(node.position.x + offsetX));
+        rect.setAttribute("y", String(node.position.y + offsetY));
         rect.setAttribute("rx", "8");
         rect.setAttribute("ry", "8");
         rect.setAttribute("width", String(node.width));
@@ -834,26 +954,123 @@
         rect.setAttribute("stroke-width", node === selectedNode ? "3" : "2");
         group.appendChild(rect);
 
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.setAttribute("x", String(node.position.x + Math.floor(node.width / 2)));
-        text.setAttribute("y", String(node.position.y + Math.floor(node.height / 2) + 5));
-        text.setAttribute("font-size", "14");
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("fill", "var(--ink)");
-        text.textContent = node.label;
-        group.appendChild(text);
+        if (node !== editingNode) {
+          const lines = getRenderLines(node);
+          const lineHeight = 13;
+          const centerY = node.position.y + Math.floor(node.height / 2) + offsetY;
+          const startY = centerY - Math.floor(((lines.length - 1) * lineHeight) / 2) + 4;
+
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.setAttribute("x", String(node.position.x + Math.floor(node.width / 2) + offsetX));
+          text.setAttribute("y", String(startY));
+          text.setAttribute("font-size", "12");
+          text.setAttribute("text-anchor", "middle");
+          text.setAttribute("fill", "var(--ink)");
+          for (let i = 0; i < lines.length; i++) {
+            const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+            tspan.setAttribute("x", String(node.position.x + Math.floor(node.width / 2) + offsetX));
+            if (i === 0) {
+              tspan.setAttribute("y", String(startY));
+            } else {
+              tspan.setAttribute("dy", String(lineHeight));
+            }
+            tspan.textContent = lines[i];
+            text.appendChild(tspan);
+          }
+          group.appendChild(text);
+        } else {
+          const editorFo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+          editorFo.setAttribute("x", String(node.position.x + 8 + offsetX));
+          editorFo.setAttribute("y", String(node.position.y + 8 + offsetY));
+          editorFo.setAttribute("width", String(node.width - 16));
+          editorFo.setAttribute("height", String(node.height - 12));
+
+          const editor = document.createElementNS("http://www.w3.org/1999/xhtml", "textarea");
+          editor.id = "activeNodeEditor";
+          editor.className = "node-editor";
+          editor.value = node.label;
+          editor.setAttribute("rows", "3");
+
+          editor.addEventListener("mousedown", (e) => e.stopPropagation());
+          editor.addEventListener("click", (e) => e.stopPropagation());
+          editor.addEventListener("input", () => {
+            const fitted = sanitizeLabelForNode(editor.value, node);
+            if (fitted !== editor.value) {
+              editor.value = fitted;
+            }
+          });
+          editor.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && e.ctrlKey) {
+              e.preventDefault();
+              commitNodeEdit(editor.value);
+            } else if (e.key === "Enter") {
+              const lineCount = splitLabelLines(editor.value).length;
+              if (lineCount >= 3) {
+                e.preventDefault();
+              }
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancelNodeEdit();
+            }
+          });
+          editor.addEventListener("blur", () => commitNodeEdit(editor.value));
+
+          editorFo.appendChild(editor);
+          group.appendChild(editorFo);
+        }
+
+        const plusCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        plusCircle.setAttribute("class", "node-plus");
+        plusCircle.setAttribute("cx", String(node.position.x + node.width - 10 + offsetX));
+        plusCircle.setAttribute("cy", String(node.position.y + 10 + offsetY));
+        plusCircle.setAttribute("r", "9");
+        plusCircle.setAttribute("fill", "#ffffff");
+        plusCircle.setAttribute("stroke", "#0f766e");
+        plusCircle.setAttribute("stroke-width", "2");
+        group.appendChild(plusCircle);
+
+        const plusText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        plusText.setAttribute("class", "node-plus");
+        plusText.setAttribute("x", String(node.position.x + node.width - 10 + offsetX));
+        plusText.setAttribute("y", String(node.position.y + 14 + offsetY));
+        plusText.setAttribute("font-size", "14");
+        plusText.setAttribute("font-weight", "700");
+        plusText.setAttribute("text-anchor", "middle");
+        plusText.setAttribute("fill", "#0f766e");
+        plusText.textContent = "+";
+        group.appendChild(plusText);
 
         group.addEventListener("click", (e) => {
           e.stopPropagation();
           if (suppressNodeClick) return;
+          if (editingNode && editingNode !== node) commitNodeEdit(document.getElementById("activeNodeEditor")?.value || editingNode.label);
           selectNode(node, true);
         });
+        group.addEventListener("dblclick", (e) => {
+          e.stopPropagation();
+          if (suppressNodeClick) return;
+          startNodeEdit(node);
+        });
+
+        const addFromPlus = (e) => {
+          e.stopPropagation();
+          if (suppressNodeClick) return;
+          selectNode(node, false);
+          addChildToNode(node);
+        };
+        plusCircle.addEventListener("click", addFromPlus);
+        plusText.addEventListener("click", addFromPlus);
 
         svg.appendChild(group);
       }
 
       svg.onclick = () => {
         if (suppressNodeClick) return;
+        if (editingNode) {
+          const active = document.getElementById("activeNodeEditor");
+          commitNodeEdit(active ? active.value : editingNode.label);
+          return;
+        }
         if (selectedNode) selectNode(null, true);
       };
 
@@ -877,19 +1094,40 @@
       ensureTreeInBounds(root, 20, 20, 100000, 100000);
 
       const bounds = getTreeBounds(root);
-      const padding = 60;
-      const canvasWidth = Math.max(1200, (bounds.maxX - bounds.minX) + padding * 2);
-      const canvasHeight = Math.max(700, (bounds.maxY - bounds.minY) + padding * 2);
+      const panPadding = 2000;
+      const treeWidth = bounds.maxX - bounds.minX;
+      const treeHeight = bounds.maxY - bounds.minY;
+      const canvasWidth = Math.max(1200, treeWidth + panPadding * 2);
+      const canvasHeight = Math.max(700, treeHeight + panPadding * 2);
+      const offsetX = panPadding - bounds.minX;
+      const offsetY = panPadding - bounds.minY;
 
       svg.setAttribute("viewBox", `0 0 ${canvasWidth} ${canvasHeight}`);
-      svg.style.width = `${canvasWidth}px`;
-      svg.style.height = `${canvasHeight}px`;
+      svg.style.width = `${Math.floor(canvasWidth * zoomScale)}px`;
+      svg.style.height = `${Math.floor(canvasHeight * zoomScale)}px`;
 
-      const meta = drawTree(svg, root);
+      const meta = drawTree(svg, root, offsetX, offsetY);
       document.getElementById("meta").textContent =
-        `compactMode=${compactMode} xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight}`;
+        `compactMode=${compactMode} xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight} zoom=${Math.round(zoomScale * 100)}%`;
 
       IfNeededCenter(recenter);
+    }
+
+    function setZoom(newZoom) {
+      const viewport = document.getElementById("treeViewport");
+      const oldZoom = zoomScale;
+      const targetZoom = clampZoom(newZoom);
+      if (Math.abs(targetZoom - oldZoom) < 0.001) return;
+
+      const centerX = viewport.scrollLeft + (viewport.clientWidth / 2);
+      const centerY = viewport.scrollTop + (viewport.clientHeight / 2);
+      zoomScale = targetZoom;
+      updateZoomInfo();
+      run(currentRoot, false);
+
+      const ratio = targetZoom / oldZoom;
+      viewport.scrollLeft = Math.max(0, (centerX * ratio) - (viewport.clientWidth / 2));
+      viewport.scrollTop = Math.max(0, (centerY * ratio) - (viewport.clientHeight / 2));
     }
 
     function IfNeededCenter(recenter) {
@@ -934,21 +1172,33 @@
         return;
       }
 
+      addChildToNode(selectedNode);
+    }
+
+    function addChildToNode(parentNode) {
+      if (editingNode) {
+        const active = document.getElementById("activeNodeEditor");
+        commitNodeEdit(active ? active.value : editingNode.label);
+      }
+
       const input = document.getElementById("newChildLabel");
       const rawLabel = input.value.trim();
-      const label = rawLabel === "" ? getAutoChildLabel(selectedNode) : rawLabel;
+      const label = rawLabel === "" ? getAutoChildLabel(parentNode) : rawLabel;
 
-      const child = new WNode(label, selectedNode);
-      selectedNode.children.push(child);
+      const child = new WNode(label, parentNode);
+      parentNode.children.push(child);
       selectNode(child, false);
 
-      document.getElementById("jsonInput").value = JSON.stringify(serializeTree(currentRoot), null, 2);
+      syncJsonFromTree();
       run(currentRoot, false);
       input.value = "";
     }
 
     document.getElementById("rerun").addEventListener("click", rerenderCurrent);
     document.getElementById("addChildBtn").addEventListener("click", addChildBelowSelected);
+    document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomScale + zoomStep));
+    document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomScale - zoomStep));
+    document.getElementById("zoomResetBtn").addEventListener("click", () => setZoom(1));
     document.getElementById("newChildLabel").addEventListener("keydown", (e) => {
       if (e.key === "Enter") addChildBelowSelected();
     });
@@ -969,6 +1219,7 @@
 
     document.getElementById("jsonInput").value = sampleTreeJson();
     updateSelectedInfo();
+    updateZoomInfo();
     run(currentRoot, true);
 
     (function wireDragPan() {
