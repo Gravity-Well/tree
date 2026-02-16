@@ -521,96 +521,181 @@
       }
     }
 
-    function layoutTreeTidy(root, centerX, yStart, xGap, yGap) {
+    function layoutTreeWalker(root, centerX, yStart, xGap, yGap) {
       if (!root) return;
 
-      function build(node) {
-        const halfWidth = Math.floor(node.width / 2);
-        const layout = {
-          left: new Map([[0, -halfWidth]]),
-          right: new Map([[0, halfWidth]])
+      function buildAux(node, parentAux = null, number = 1) {
+        const aux = {
+          node,
+          parent: parentAux,
+          children: [],
+          number,
+          prelim: 0,
+          mod: 0,
+          change: 0,
+          shift: 0,
+          thread: null,
+          ancestor: null
         };
+        aux.ancestor = aux;
 
         const visibleChildren = getVisibleChildren(node);
-        if (!visibleChildren || visibleChildren.length === 0) {
-          node._tidyChildOffset = 0;
-          return layout;
+        for (let i = 0; i < visibleChildren.length; i++) {
+          aux.children.push(buildAux(visibleChildren[i], aux, i + 1));
         }
-
-        const placed = [];
-        const placedRight = new Map();
-
-        for (const child of visibleChildren) {
-          const childLayout = build(child);
-          let shift = 0;
-
-          for (const [depth, childLeft] of childLayout.left.entries()) {
-            if (placedRight.has(depth)) {
-              const needed = placedRight.get(depth) + xGap - childLeft;
-              if (needed > shift) shift = needed;
-            }
-          }
-
-          for (const [depth, childRight] of childLayout.right.entries()) {
-            const value = childRight + shift;
-            const current = placedRight.get(depth);
-            if (current === undefined || value > current) {
-              placedRight.set(depth, value);
-            }
-          }
-
-          placed.push({ child, childLayout, shift });
-        }
-
-        const firstShift = placed[0].shift;
-        const lastShift = placed[placed.length - 1].shift;
-        const centerShift = (firstShift + lastShift) / 2;
-        for (const p of placed) {
-          p.shift -= centerShift;
-          p.child._tidyChildOffset = p.shift;
-        }
-
-        for (const p of placed) {
-          for (const [depth, l] of p.childLayout.left.entries()) {
-            const key = depth + 1;
-            const value = l + p.shift;
-            const current = layout.left.get(key);
-            if (current === undefined || value < current) {
-              layout.left.set(key, value);
-            }
-          }
-          for (const [depth, r] of p.childLayout.right.entries()) {
-            const key = depth + 1;
-            const value = r + p.shift;
-            const current = layout.right.get(key);
-            if (current === undefined || value > current) {
-              layout.right.set(key, value);
-            }
-          }
-        }
-
-        return layout;
+        return aux;
       }
 
-      function assign(node, absoluteCenterX, depth) {
-        node.position = {
-          x: Math.round(absoluteCenterX - (node.width / 2)),
+      function leftSibling(v) {
+        if (!v.parent || v.number <= 1) return null;
+        return v.parent.children[v.number - 2];
+      }
+
+      function leftmostSibling(v) {
+        if (!v.parent || v.parent.children.length === 0) return null;
+        return v.parent.children[0];
+      }
+
+      function nextLeft(v) {
+        if (!v) return null;
+        if (v.children.length > 0) return v.children[0];
+        return v.thread;
+      }
+
+      function nextRight(v) {
+        if (!v) return null;
+        if (v.children.length > 0) return v.children[v.children.length - 1];
+        return v.thread;
+      }
+
+      function siblingDistance(leftAux, rightAux) {
+        return ((leftAux.node.width + rightAux.node.width) / 2) + xGap;
+      }
+
+      function moveSubtree(wl, wr, shift) {
+        const subtrees = wr.number - wl.number;
+        if (subtrees <= 0) return;
+        wr.change -= shift / subtrees;
+        wr.shift += shift;
+        wl.change += shift / subtrees;
+        wr.prelim += shift;
+        wr.mod += shift;
+      }
+
+      function executeShifts(v) {
+        let shift = 0;
+        let change = 0;
+        for (let i = v.children.length - 1; i >= 0; i--) {
+          const w = v.children[i];
+          w.prelim += shift;
+          w.mod += shift;
+          change += w.change;
+          shift += w.shift + change;
+        }
+      }
+
+      function ancestor(vil, v, defaultAncestor) {
+        if (!v.parent) return defaultAncestor;
+        if (v.parent.children.includes(vil.ancestor)) return vil.ancestor;
+        return defaultAncestor;
+      }
+
+      function apportion(v, defaultAncestor) {
+        const w = leftSibling(v);
+        if (!w) return defaultAncestor;
+
+        let vir = v;
+        let vor = v;
+        let vil = w;
+        let vol = leftmostSibling(v);
+        let sir = vir.mod;
+        let sor = vor.mod;
+        let sil = vil.mod;
+        let sol = vol.mod;
+
+        while (nextRight(vil) && nextLeft(vir)) {
+          vil = nextRight(vil);
+          vir = nextLeft(vir);
+          vol = nextLeft(vol);
+          vor = nextRight(vor);
+          vor.ancestor = v;
+
+          const shift = (vil.prelim + sil) - (vir.prelim + sir) + siblingDistance(vil, vir);
+          if (shift > 0) {
+            const a = ancestor(vil, v, defaultAncestor);
+            moveSubtree(a, v, shift);
+            sir += shift;
+            sor += shift;
+          }
+
+          sil += vil.mod;
+          sir += vir.mod;
+          sol += vol.mod;
+          sor += vor.mod;
+        }
+
+        if (nextRight(vil) && !nextRight(vor)) {
+          vor.thread = nextRight(vil);
+          vor.mod += sil - sor;
+        }
+        if (nextLeft(vir) && !nextLeft(vol)) {
+          vol.thread = nextLeft(vir);
+          vol.mod += sir - sol;
+          defaultAncestor = v;
+        }
+
+        return defaultAncestor;
+      }
+
+      function firstWalk(v) {
+        if (v.children.length === 0) {
+          const left = leftSibling(v);
+          v.prelim = left ? left.prelim + siblingDistance(left, v) : 0;
+          return;
+        }
+
+        let defaultAncestor = v.children[0];
+        for (const w of v.children) {
+          firstWalk(w);
+          defaultAncestor = apportion(w, defaultAncestor);
+        }
+        executeShifts(v);
+
+        const midpoint = (v.children[0].prelim + v.children[v.children.length - 1].prelim) / 2;
+        const left = leftSibling(v);
+        if (left) {
+          v.prelim = left.prelim + siblingDistance(left, v);
+          v.mod = v.prelim - midpoint;
+        } else {
+          v.prelim = midpoint;
+        }
+      }
+
+      function secondWalk(v, m, depth) {
+        const center = v.prelim + m;
+        v.node.position = {
+          x: Math.round(center - (v.node.width / 2)),
           y: yStart + (depth * yGap)
         };
-        for (const child of getVisibleChildren(node)) {
-          assign(child, absoluteCenterX + (child._tidyChildOffset || 0), depth + 1);
+        for (const child of v.children) {
+          secondWalk(child, m + v.mod, depth + 1);
         }
       }
 
-      build(root);
-      assign(root, centerX, 0);
-      cleanupTidyFields(root);
-    }
+      function shiftVisibleSubtree(node, amount) {
+        node.position.x += amount;
+        for (const child of getVisibleChildren(node)) {
+          shiftVisibleSubtree(child, amount);
+        }
+      }
 
-    function cleanupTidyFields(node) {
-      if (!node) return;
-      delete node._tidyChildOffset;
-      for (const child of node.children) cleanupTidyFields(child);
+      const auxRoot = buildAux(root, null, 1);
+      firstWalk(auxRoot);
+      secondWalk(auxRoot, 0, 0);
+
+      const rootCenter = root.position.x + (root.width / 2);
+      const delta = Math.round(centerX - rootCenter);
+      if (delta !== 0) shiftVisibleSubtree(root, delta);
     }
 
     function isSimpleSubtree(node) {
@@ -1285,7 +1370,7 @@
       const yOffset = Number(document.getElementById("yOffset").value || 70);
       const svg = document.getElementById("treeSvg");
       if (recomputeLayout) {
-        layoutTreeTidy(root, 600, 50, xOffset, yOffset);
+        layoutTreeWalker(root, 600, 50, xOffset, yOffset);
         ensureTreeInBounds(root, 20, 20, 100000, 100000);
       }
 
@@ -1304,7 +1389,7 @@
 
       const meta = drawTree(svg, root, offsetX, offsetY);
       document.getElementById("meta").textContent =
-        `mode=tidy xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight} zoom=${Math.round(zoomScale * 100)}%`;
+        `mode=walker xOffset=${xOffset} yOffset=${yOffset} nodes=${meta.nodeCount} edges=${meta.lineCount} canvas=${canvasWidth}x${canvasHeight} zoom=${Math.round(zoomScale * 100)}%`;
 
       IfNeededCenter(recenter);
     }
