@@ -1184,7 +1184,14 @@
     }
 
     function getAutoChildLabel(parent) {
-      return `${parent.label}${parent.children.length + 1}`;
+      const next = parent.children.length + 1;
+
+      if (!parent.parent) {
+        return `Node ${next}`;
+      }
+
+      const base = (parent.label || "Node").trim();
+      return `${base}-${next}`;
     }
 
     function updateSelectedInfo() {
