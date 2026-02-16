@@ -644,6 +644,10 @@
 
       enforceSiblingNodeGap(node, minOffset);
 
+      if (!node.parent) {
+        enforceGlobalRowGap(node, minOffset);
+      }
+
       centerParentAboveChildren(node);
     }
 
@@ -704,6 +708,57 @@
           }
         }
       } while (changed);
+    }
+
+    function collectNodes(node, output) {
+      if (!node) return;
+      output.push(node);
+      for (const child of node.children) collectNodes(child, output);
+    }
+
+    function getTopLevelChild(root, node) {
+      if (!root || !node) return null;
+      let current = node;
+      while (current.parent && current.parent !== root) {
+        current = current.parent;
+      }
+      return current.parent === root ? current : null;
+    }
+
+    function enforceGlobalRowGap(root, minOffset) {
+      if (!root) return;
+
+      let pass = 0;
+      let changed;
+      do {
+        pass += 1;
+        changed = false;
+
+        const allNodes = [];
+        collectNodes(root, allNodes);
+        const rows = new Map();
+
+        for (const node of allNodes) {
+          if (!rows.has(node.position.y)) rows.set(node.position.y, []);
+          rows.get(node.position.y).push(node);
+        }
+
+        for (const rowNodes of rows.values()) {
+          rowNodes.sort((a, b) => a.position.x - b.position.x);
+          for (let i = 1; i < rowNodes.length; i++) {
+            const leftNode = rowNodes[i - 1];
+            const rightNode = rowNodes[i];
+            const gap = rightNode.position.x - (leftNode.position.x + leftNode.width);
+            if (gap < minOffset) {
+              const shiftAmount = minOffset - gap;
+              let anchor = getTopLevelChild(root, rightNode);
+              if (!anchor || anchor === root) anchor = rightNode;
+              shiftSubtree(anchor, shiftAmount);
+              changed = true;
+            }
+          }
+        }
+      } while (changed && pass < 20);
     }
 
     function alignNestedColumns(node) {
