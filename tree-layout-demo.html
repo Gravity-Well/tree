@@ -1084,14 +1084,16 @@
       viewport.scrollTop = Math.max(0, Math.floor((svg.clientHeight - viewport.clientHeight) / 2));
     }
 
-    function run(root, recenter = false) {
+    function run(root, recenter = false, recomputeLayout = true) {
       const compactMode = document.getElementById("compactMode").checked;
       const xOffset = Number(document.getElementById("xOffset").value || 30);
       const yOffset = Number(document.getElementById("yOffset").value || 70);
       const svg = document.getElementById("treeSvg");
-      layoutTree(root, 600, 50, xOffset, yOffset, compactMode);
-      adjustOffsets(root, xOffset);
-      ensureTreeInBounds(root, 20, 20, 100000, 100000);
+      if (recomputeLayout) {
+        layoutTree(root, 600, 50, xOffset, yOffset, compactMode);
+        adjustOffsets(root, xOffset);
+        ensureTreeInBounds(root, 20, 20, 100000, 100000);
+      }
 
       const bounds = getTreeBounds(root);
       const panPadding = 2000;
@@ -1123,7 +1125,7 @@
       const centerY = viewport.scrollTop + (viewport.clientHeight / 2);
       zoomScale = targetZoom;
       updateZoomInfo();
-      run(currentRoot, false);
+      run(currentRoot, false, false);
 
       const ratio = targetZoom / oldZoom;
       viewport.scrollLeft = Math.max(0, (centerX * ratio) - (viewport.clientWidth / 2));
