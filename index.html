@@ -6,14 +6,16 @@
   <title>Tree Layout Demo</title>
   <style>
     :root {
-      --bg: #f4f7f8;
+      --bg: #eef2f3;
       --panel: #ffffff;
-      --ink: #1f2933;
-      --muted: #52606d;
-      --line: #7b8794;
-      --node: #d9f2ff;
+      --ink: #122632;
+      --muted: #4f6472;
+      --line: #718096;
+      --node: #d7e9f4;
       --node-border: #245b7a;
-      --accent: #0f766e;
+      --accent: #0d7a76;
+      --accent-dark: #0b5f5d;
+      --danger: #b42318;
     }
 
     * { box-sizing: border-box; }
@@ -26,36 +28,84 @@
     }
 
     .layout {
-      max-width: 1200px;
+      max-width: 1380px;
       margin: 24px auto;
       padding: 0 16px;
     }
 
     .toolbar {
       background: var(--panel);
-      border: 1px solid #d9e2ec;
-      border-radius: 10px;
-      padding: 12px;
+      border: 1px solid #d2dde8;
+      border-radius: 14px;
+      padding: 14px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: center;
+      flex-direction: column;
+      gap: 10px;
       margin-bottom: 12px;
+      box-shadow: 0 6px 20px rgba(17, 50, 74, 0.08);
+    }
+
+    .toolbar-main {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0.2px;
+    }
+
+    .brand p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .toolbar-actions,
+    .toolbar-secondary {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .toolbar-secondary {
+      width: 100%;
+      border-top: 1px solid #e4ebf2;
+      padding-top: 10px;
     }
 
     .json-panel {
       background: var(--panel);
-      border: 1px solid #d9e2ec;
-      border-radius: 10px;
+      border: 1px solid #d2dde8;
+      border-radius: 14px;
       padding: 12px;
       margin-bottom: 12px;
+      box-shadow: 0 6px 20px rgba(17, 50, 74, 0.06);
+    }
+
+    .json-panel summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #25435b;
     }
 
     .json-panel .row {
       display: flex;
       gap: 8px;
       align-items: center;
-      margin-bottom: 8px;
+      margin: 10px 0 8px;
       flex-wrap: wrap;
     }
 
@@ -113,10 +163,22 @@
       background: var(--accent);
       color: #fff;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 8px 14px;
       cursor: pointer;
       font-weight: 600;
+    }
+
+    .toolbar button:hover {
+      background: var(--accent-dark);
+    }
+
+    .btn-primary {
+      background: #0f766e;
+    }
+
+    .btn-subtle {
+      background: #45637a;
     }
 
     .canvas-wrap {
@@ -191,29 +253,42 @@
 <body>
   <div class="layout">
     <div class="toolbar">
-      <label>Horizontal <input id="xOffset" type="number" min="0" value="30" /></label>
-      <label>Vertical <input id="yOffset" type="number" min="50" value="70" /></label>
-      <button id="rerun">Re-layout</button>
-      <button id="expandAllBtn">Expand All</button>
-      <button id="collapseAllBtn">Collapse All</button>
-      <label>Child label <input id="newChildLabel" type="text" placeholder="auto" /></label>
-      <button id="addChildBtn">Add Child Below Selected</button>
-      <button id="zoomOutBtn">-</button>
-      <button id="zoomInBtn">+</button>
-      <button id="zoomResetBtn">100%</button>
-      <span id="zoomInfo" class="selected-info">zoom=100%</span>
-      <span id="selectedInfo" class="selected-info">selected=(none)</span>
+      <div class="toolbar-main">
+        <div class="brand">
+          <h1>Tree Studio</h1>
+          <p>Build and explore logic trees visually.</p>
+        </div>
+        <div class="toolbar-actions">
+          <button id="newTreeBtn" class="btn-primary">New Tree</button>
+          <button id="loadSample">Load Sample</button>
+          <button id="loadPackedSample">Load Packed Sample</button>
+          <button id="rerun">Re-layout</button>
+        </div>
+      </div>
+      <div class="toolbar-secondary">
+        <label>Child label <input id="newChildLabel" type="text" placeholder="auto" /></label>
+        <button id="addChildBtn">Add Child Below Selected</button>
+        <button id="expandAllBtn" class="btn-subtle">Expand All</button>
+        <button id="collapseAllBtn" class="btn-subtle">Collapse All</button>
+        <button id="zoomOutBtn" class="btn-subtle">-</button>
+        <button id="zoomInBtn" class="btn-subtle">+</button>
+        <button id="zoomResetBtn" class="btn-subtle">100%</button>
+        <span id="zoomInfo" class="selected-info">zoom=100%</span>
+        <span id="selectedInfo" class="selected-info">selected=(none)</span>
+        <span id="versionInfo" class="selected-info">version=loading...</span>
+      </div>
     </div>
 
-    <div class="json-panel">
+    <details class="json-panel">
+      <summary>Advanced: JSON and Layout Settings</summary>
       <div class="row">
-        <button id="loadJson">Load JSON Tree</button>
-        <button id="loadSample">Load Sample</button>
-        <button id="loadPackedSample">Load Packed Sample</button>
+        <label>Horizontal <input id="xOffset" type="number" min="0" value="30" /></label>
+        <label>Vertical <input id="yOffset" type="number" min="50" value="70" /></label>
+        <button id="loadJson">Apply JSON</button>
       </div>
       <textarea id="jsonInput" aria-label="Tree JSON"></textarea>
       <div id="error" class="error"></div>
-    </div>
+    </details>
 
     <div id="treeViewport" class="canvas-wrap">
       <svg id="treeSvg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMin meet"></svg>
@@ -243,6 +318,9 @@
     const minZoom = 0.4;
     const maxZoom = 2.5;
     const zoomStep = 0.1;
+    const repoOwner = "Gravity-Well";
+    const repoName = "tree";
+    const deployedBranch = "feature/tidy-layout-spike";
 
     function addChild(parent, label) {
       const c = new WNode(label, parent);
@@ -1057,6 +1135,24 @@
       document.getElementById("zoomInfo").textContent = `zoom=${Math.round(zoomScale * 100)}%`;
     }
 
+    async function updateVersionInfo() {
+      const versionEl = document.getElementById("versionInfo");
+      try {
+        const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/commits/${deployedBranch}`, {
+          headers: { "Accept": "application/vnd.github+json" }
+        });
+        if (!res.ok) throw new Error("version fetch failed");
+        const data = await res.json();
+        const sha = (data.sha || "").slice(0, 7);
+        const date = data.commit && data.commit.author && data.commit.author.date
+          ? new Date(data.commit.author.date).toISOString().slice(0, 10)
+          : "";
+        versionEl.textContent = `version=${sha}${date ? " (" + date + ")" : ""}`;
+      } catch {
+        versionEl.textContent = "version=unknown";
+      }
+    }
+
     function clampZoom(value) {
       return Math.max(minZoom, Math.min(maxZoom, value));
     }
@@ -1430,7 +1526,7 @@
       window.requestAnimationFrame(centerViewport);
     }
 
-    currentRoot = buildSampleTree();
+    currentRoot = new WNode("Root", null);
     selectedNode = currentRoot;
 
     function clearError() {
@@ -1458,6 +1554,15 @@
       } catch (err) {
         setError(`Invalid JSON tree: ${err.message}`);
       }
+    }
+
+    function newTree() {
+      clearError();
+      currentRoot = new WNode("Root", null);
+      selectedNode = currentRoot;
+      updateSelectedInfo();
+      syncJsonFromTree();
+      run(currentRoot, true);
     }
 
     function addChildBelowSelected() {
@@ -1536,6 +1641,7 @@
     }
 
     document.getElementById("rerun").addEventListener("click", rerenderCurrent);
+    document.getElementById("newTreeBtn").addEventListener("click", newTree);
     document.getElementById("expandAllBtn").addEventListener("click", expandAll);
     document.getElementById("collapseAllBtn").addEventListener("click", collapseAll);
     document.getElementById("addChildBtn").addEventListener("click", addChildBelowSelected);
@@ -1560,9 +1666,10 @@
       loadJsonTree();
     });
 
-    document.getElementById("jsonInput").value = sampleTreeJson();
+    syncJsonFromTree();
     updateSelectedInfo();
     updateZoomInfo();
+    updateVersionInfo();
     run(currentRoot, true);
 
     (function wireDragPan() {

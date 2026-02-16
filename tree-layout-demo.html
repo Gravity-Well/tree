@@ -275,6 +275,7 @@
         <button id="zoomResetBtn" class="btn-subtle">100%</button>
         <span id="zoomInfo" class="selected-info">zoom=100%</span>
         <span id="selectedInfo" class="selected-info">selected=(none)</span>
+        <span id="versionInfo" class="selected-info">version=loading...</span>
       </div>
     </div>
 
@@ -317,6 +318,9 @@
     const minZoom = 0.4;
     const maxZoom = 2.5;
     const zoomStep = 0.1;
+    const repoOwner = "Gravity-Well";
+    const repoName = "tree";
+    const deployedBranch = "feature/tidy-layout-spike";
 
     function addChild(parent, label) {
       const c = new WNode(label, parent);
@@ -1131,6 +1135,24 @@
       document.getElementById("zoomInfo").textContent = `zoom=${Math.round(zoomScale * 100)}%`;
     }
 
+    async function updateVersionInfo() {
+      const versionEl = document.getElementById("versionInfo");
+      try {
+        const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/commits/${deployedBranch}`, {
+          headers: { "Accept": "application/vnd.github+json" }
+        });
+        if (!res.ok) throw new Error("version fetch failed");
+        const data = await res.json();
+        const sha = (data.sha || "").slice(0, 7);
+        const date = data.commit && data.commit.author && data.commit.author.date
+          ? new Date(data.commit.author.date).toISOString().slice(0, 10)
+          : "";
+        versionEl.textContent = `version=${sha}${date ? " (" + date + ")" : ""}`;
+      } catch {
+        versionEl.textContent = "version=unknown";
+      }
+    }
+
     function clampZoom(value) {
       return Math.max(minZoom, Math.min(maxZoom, value));
     }
@@ -1647,6 +1669,7 @@
     syncJsonFromTree();
     updateSelectedInfo();
     updateZoomInfo();
+    updateVersionInfo();
     run(currentRoot, true);
 
     (function wireDragPan() {
