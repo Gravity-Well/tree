@@ -632,38 +632,6 @@
       return node;
     }
 
-    function layoutTree(node, centerX, y, xOffset, yOffset, compactMode = false) {
-      if (!node) return;
-      node.position = { x: centerX - Math.floor(node.width / 2), y };
-
-      const childCount = node.children.length;
-      if (childCount === 0) return;
-
-      let actualXOffset = xOffset;
-      if (compactMode) {
-        if (childCount > 3) {
-          actualXOffset = Math.max(5, Math.floor(xOffset / 4));
-        } else if (childCount > 1) {
-          actualXOffset = Math.max(6, Math.floor(xOffset / 3));
-        }
-      }
-
-      let totalChildWidth = 0;
-      for (const child of node.children) totalChildWidth += child.width;
-      totalChildWidth += (childCount - 1) * actualXOffset;
-
-      let startX = centerX - Math.floor(totalChildWidth / 2);
-
-      let actualYOffset = yOffset;
-      if (compactMode) actualYOffset = Math.max(55, yOffset - 15);
-
-      for (const child of node.children) {
-        const childCenterX = startX + Math.floor(child.width / 2);
-        layoutTree(child, childCenterX, y + actualYOffset, xOffset, yOffset, compactMode);
-        startX += child.width + actualXOffset;
-      }
-    }
-
     function layoutTreeWalker(root, centerX, yStart, xGap, yGap) {
       if (!root) return;
 
