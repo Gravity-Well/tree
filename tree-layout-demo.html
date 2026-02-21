@@ -161,6 +161,15 @@
       border-radius: 6px;
     }
 
+    .toolbar select,
+    .json-panel input[type="text"],
+    .json-panel input[type="password"],
+    .json-panel select {
+      padding: 5px 8px;
+      border: 1px solid #bcccdc;
+      border-radius: 6px;
+    }
+
     .toolbar button {
       background: var(--accent);
       color: #fff;
@@ -289,6 +298,22 @@
         <label>Vertical <input id="yOffset" type="number" min="50" value="70" /></label>
         <button id="loadJson">Apply JSON</button>
         <button id="rerun">Re-layout</button>
+      </div>
+      <div class="row">
+        <label>Storage account <input id="blobAccount" type="text" value="nusofttreestore" /></label>
+        <label>Container <input id="blobContainer" type="text" value="trees" /></label>
+        <label>SAS token <input id="blobSas" type="password" placeholder="paste container SAS token" /></label>
+      </div>
+      <div class="row">
+        <label>Tree name <input id="cloudTreeName" type="text" placeholder="my-tree" /></label>
+        <button id="saveCloudBtn">Save to Cloud</button>
+        <button id="refreshCloudBtn">Refresh Cloud List</button>
+        <label>Cloud trees
+          <select id="cloudTreeSelect">
+            <option value="">(none)</option>
+          </select>
+        </label>
+        <button id="loadCloudBtn">Load Selected</button>
       </div>
       <textarea id="jsonInput" aria-label="Tree JSON"></textarea>
       <div id="error" class="error"></div>
@@ -1570,6 +1595,130 @@
       document.getElementById("error").textContent = message;
     }
 
+    function getBlobConfig() {
+      return {
+        account: document.getElementById("blobAccount").value.trim(),
+        container: document.getElementById("blobContainer").value.trim(),
+        sas: document.getElementById("blobSas").value.trim().replace(/^\?/, "")
+      };
+    }
+
+    function persistBlobConfig() {
+      const cfg = getBlobConfig();
+      localStorage.setItem("tree_blob_account", cfg.account);
+      localStorage.setItem("tree_blob_container", cfg.container);
+      localStorage.setItem("tree_blob_sas", cfg.sas);
+    }
+
+    function restoreBlobConfig() {
+      const account = localStorage.getItem("tree_blob_account");
+      const container = localStorage.getItem("tree_blob_container");
+      const sas = localStorage.getItem("tree_blob_sas");
+      if (account) document.getElementById("blobAccount").value = account;
+      if (container) document.getElementById("blobContainer").value = container;
+      if (sas) document.getElementById("blobSas").value = sas;
+    }
+
+    function blobBaseUrl(cfg) {
+      return `https://${cfg.account}.blob.core.windows.net/${cfg.container}`;
+    }
+
+    function requireBlobConfig() {
+      const cfg = getBlobConfig();
+      if (!cfg.account || !cfg.container || !cfg.sas) {
+        throw new Error("Blob account, container, and SAS token are required.");
+      }
+      return cfg;
+    }
+
+    async function saveTreeToCloud() {
+      clearError();
+      try {
+        const cfg = requireBlobConfig();
+        persistBlobConfig();
+
+        let name = document.getElementById("cloudTreeName").value.trim();
+        if (!name) {
+          const d = new Date();
+          const stamp = d.toISOString().replace(/[:.]/g, "-");
+          name = `tree-${stamp}`;
+          document.getElementById("cloudTreeName").value = name;
+        }
+        if (!name.toLowerCase().endsWith(".json")) name += ".json";
+
+        const payload = JSON.stringify(serializeTree(currentRoot), null, 2);
+        const url = `${blobBaseUrl(cfg)}/${encodeURIComponent(name)}?${cfg.sas}`;
+        const res = await fetch(url, {
+          method: "PUT",
+          headers: {
+            "x-ms-blob-type": "BlockBlob",
+            "Content-Type": "application/json; charset=utf-8"
+          },
+          body: payload
+        });
+
+        if (!res.ok) {
+          throw new Error(`Save failed (${res.status})`);
+        }
+        await refreshCloudList();
+      } catch (err) {
+        setError(err.message || "Cloud save failed.");
+      }
+    }
+
+    async function refreshCloudList() {
+      clearError();
+      try {
+        const cfg = requireBlobConfig();
+        persistBlobConfig();
+        const url = `${blobBaseUrl(cfg)}?restype=container&comp=list&${cfg.sas}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`List failed (${res.status})`);
+        const xml = await res.text();
+        const doc = new DOMParser().parseFromString(xml, "application/xml");
+        const names = Array.from(doc.getElementsByTagName("Name")).map((n) => n.textContent).filter(Boolean);
+
+        const sel = document.getElementById("cloudTreeSelect");
+        const current = sel.value;
+        sel.innerHTML = "";
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = names.length ? "(select tree)" : "(none)";
+        sel.appendChild(empty);
+
+        names.forEach((name) => {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          sel.appendChild(opt);
+        });
+
+        if (current && names.includes(current)) {
+          sel.value = current;
+        }
+      } catch (err) {
+        setError(err.message || "Cloud list failed.");
+      }
+    }
+
+    async function loadSelectedCloudTree() {
+      clearError();
+      try {
+        const selected = document.getElementById("cloudTreeSelect").value;
+        if (!selected) throw new Error("Select a cloud tree first.");
+        const cfg = requireBlobConfig();
+        persistBlobConfig();
+        const url = `${blobBaseUrl(cfg)}/${encodeURIComponent(selected)}?${cfg.sas}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Load failed (${res.status})`);
+        const text = await res.text();
+        document.getElementById("jsonInput").value = text;
+        loadJsonTree();
+      } catch (err) {
+        setError(err.message || "Cloud load failed.");
+      }
+    }
+
     function rerenderCurrent() {
       clearError();
       run(currentRoot, false);
@@ -1678,6 +1827,9 @@
     document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomScale - zoomStep));
     document.getElementById("zoomResetBtn").addEventListener("click", () => setZoom(1));
     document.getElementById("loadJson").addEventListener("click", loadJsonTree);
+    document.getElementById("saveCloudBtn").addEventListener("click", saveTreeToCloud);
+    document.getElementById("refreshCloudBtn").addEventListener("click", refreshCloudList);
+    document.getElementById("loadCloudBtn").addEventListener("click", loadSelectedCloudTree);
     document.getElementById("loadSample").addEventListener("click", () => {
       clearError();
       document.getElementById("jsonInput").value = sampleTreeJson();
@@ -1692,11 +1844,15 @@
       loadJsonTree();
     });
 
+    restoreBlobConfig();
     syncJsonFromTree();
     updateSelectedInfo();
     updateZoomInfo();
     updateVersionInfo();
     run(currentRoot, true);
+    if (document.getElementById("blobSas").value.trim()) {
+      refreshCloudList();
+    }
 
     (function wireDragPan() {
       const viewport = document.getElementById("treeViewport");
