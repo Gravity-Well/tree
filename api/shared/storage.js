@@ -3,10 +3,13 @@
 const { BlobServiceClient } = require("@azure/storage-blob");
 
 function getConfig() {
-  const connectionString = process.env.TREE_BLOB_CONNECTION_STRING;
+  const connectionString =
+    process.env.TREE_BLOB_CONNECTION_STRING ||
+    process.env.AZURE_STORAGE_CONNECTION_STRING ||
+    process.env.AzureWebJobsStorage;
   const containerName = process.env.TREE_BLOB_CONTAINER || "trees";
   if (!connectionString) {
-    throw new Error("Missing TREE_BLOB_CONNECTION_STRING setting.");
+    throw new Error("Missing storage connection setting.");
   }
   return { connectionString, containerName };
 }
