@@ -1640,6 +1640,22 @@
       return name;
     }
 
+    async function parseApiJson(res, contextLabel) {
+      const text = await res.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (_) {
+        const preview = text.slice(0, 80).replace(/\s+/g, " ");
+        throw new Error(`${contextLabel} returned non-JSON response (${res.status}): ${preview}`);
+      }
+      if (!res.ok) {
+        const msg = data && data.error ? data.error : `${contextLabel} failed (${res.status})`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
     async function saveTreeToCloud() {
       clearError();
       try {
@@ -1656,7 +1672,7 @@
           })
         });
 
-        if (!res.ok) throw new Error(`Save failed (${res.status})`);
+        await parseApiJson(res, "Save");
         await refreshCloudList();
       } catch (err) {
         setError(err.message || "Cloud save failed.");
@@ -1667,8 +1683,7 @@
       clearError();
       try {
         const res = await fetch("/api/trees");
-        if (!res.ok) throw new Error(`List failed (${res.status})`);
-        const payload = await res.json();
+        const payload = await parseApiJson(res, "List");
         const names = Array.isArray(payload.items)
           ? payload.items.map((x) => x && x.name).filter((x) => typeof x === "string" && x.length > 0)
           : [];
@@ -1702,8 +1717,7 @@
         const selected = document.getElementById("cloudTreeSelect").value;
         if (!selected) throw new Error("Select a cloud tree first.");
         const res = await fetch(`/api/trees/${encodeURIComponent(selected)}`);
-        if (!res.ok) throw new Error(`Load failed (${res.status})`);
-        const payload = await res.json();
+        const payload = await parseApiJson(res, "Load");
         const tree = payload && payload.tree ? payload.tree : payload;
         document.getElementById("jsonInput").value = JSON.stringify(tree, null, 2);
         loadJsonTree();
