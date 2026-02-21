@@ -378,6 +378,8 @@
     let editingNode = null;
     let editingOriginalLabel = "";
     let zoomScale = 1;
+    let preferredInitialScrollLeft = 0;
+    let preferredInitialScrollTop = 0;
     const minZoom = 0.4;
     const maxZoom = 2.5;
     const zoomStep = 0.1;
@@ -1263,15 +1265,15 @@
 
     function centerViewport() {
       const viewport = document.getElementById("treeViewport");
-      const svg = document.getElementById("treeSvg");
-      viewport.scrollLeft = Math.max(0, Math.floor((svg.clientWidth - viewport.clientWidth) / 2));
-      viewport.scrollTop = Math.max(0, Math.floor((svg.clientHeight - viewport.clientHeight) / 2));
+      viewport.scrollLeft = Math.max(0, preferredInitialScrollLeft);
+      viewport.scrollTop = Math.max(0, preferredInitialScrollTop);
     }
 
     function run(root, recenter = false, recomputeLayout = true) {
       const xOffset = Number(document.getElementById("xOffset").value || 30);
       const yOffset = Number(document.getElementById("yOffset").value || 70);
       const svg = document.getElementById("treeSvg");
+      const viewport = document.getElementById("treeViewport");
       if (recomputeLayout) {
         layoutTreeWalker(root, 600, 50, xOffset, yOffset);
         ensureTreeInBounds(root, 20, 20, 100000, 100000);
@@ -1285,6 +1287,10 @@
       const canvasHeight = Math.max(700, treeHeight + panPadding * 2);
       const offsetX = panPadding - bounds.minX;
       const offsetY = panPadding - bounds.minY;
+      const treeCenterX = ((bounds.minX + bounds.maxX) / 2) + offsetX;
+      const treeTopY = bounds.minY + offsetY;
+      preferredInitialScrollLeft = Math.floor(treeCenterX - (viewport.clientWidth / 2));
+      preferredInitialScrollTop = Math.floor(treeTopY - 20);
 
       svg.setAttribute("viewBox", `0 0 ${canvasWidth} ${canvasHeight}`);
       svg.style.width = `${Math.floor(canvasWidth * zoomScale)}px`;
