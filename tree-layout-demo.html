@@ -329,11 +329,6 @@
     <details id="cloudPanel" class="cloud-panel">
       <summary>Cloud Save and Load</summary>
       <div class="row">
-        <label>Storage account <input id="blobAccount" type="text" value="nusofttreestore" /></label>
-        <label>Container <input id="blobContainer" type="text" value="trees" /></label>
-        <label>SAS token <input id="blobSas" type="password" placeholder="paste container SAS token" /></label>
-      </div>
-      <div class="row">
         <label>Tree name <input id="cloudTreeName" type="text" placeholder="my-tree" /></label>
         <button id="saveCloudBtn">Save to Cloud</button>
         <button id="refreshCloudBtn">Refresh Cloud List</button>
@@ -1634,71 +1629,34 @@
       document.getElementById("error").textContent = message;
     }
 
-    function getBlobConfig() {
-      return {
-        account: document.getElementById("blobAccount").value.trim(),
-        container: document.getElementById("blobContainer").value.trim(),
-        sas: document.getElementById("blobSas").value.trim().replace(/^\?/, "")
-      };
-    }
-
-    function persistBlobConfig() {
-      const cfg = getBlobConfig();
-      localStorage.setItem("tree_blob_account", cfg.account);
-      localStorage.setItem("tree_blob_container", cfg.container);
-      localStorage.setItem("tree_blob_sas", cfg.sas);
-    }
-
-    function restoreBlobConfig() {
-      const account = localStorage.getItem("tree_blob_account");
-      const container = localStorage.getItem("tree_blob_container");
-      const sas = localStorage.getItem("tree_blob_sas");
-      if (account) document.getElementById("blobAccount").value = account;
-      if (container) document.getElementById("blobContainer").value = container;
-      if (sas) document.getElementById("blobSas").value = sas;
-    }
-
-    function blobBaseUrl(cfg) {
-      return `https://${cfg.account}.blob.core.windows.net/${cfg.container}`;
-    }
-
-    function requireBlobConfig() {
-      const cfg = getBlobConfig();
-      if (!cfg.account || !cfg.container || !cfg.sas) {
-        throw new Error("Blob account, container, and SAS token are required.");
+    function normalizeTreeFileName(inputName) {
+      let name = (inputName || "").trim();
+      if (!name) {
+        const d = new Date();
+        const stamp = d.toISOString().replace(/[:.]/g, "-");
+        name = `tree-${stamp}`;
       }
-      return cfg;
+      if (!name.toLowerCase().endsWith(".json")) name += ".json";
+      return name;
     }
 
     async function saveTreeToCloud() {
       clearError();
       try {
-        const cfg = requireBlobConfig();
-        persistBlobConfig();
+        const input = document.getElementById("cloudTreeName");
+        const name = normalizeTreeFileName(input.value);
+        input.value = name;
 
-        let name = document.getElementById("cloudTreeName").value.trim();
-        if (!name) {
-          const d = new Date();
-          const stamp = d.toISOString().replace(/[:.]/g, "-");
-          name = `tree-${stamp}`;
-          document.getElementById("cloudTreeName").value = name;
-        }
-        if (!name.toLowerCase().endsWith(".json")) name += ".json";
-
-        const payload = JSON.stringify(serializeTree(currentRoot), null, 2);
-        const url = `${blobBaseUrl(cfg)}/${encodeURIComponent(name)}?${cfg.sas}`;
-        const res = await fetch(url, {
-          method: "PUT",
-          headers: {
-            "x-ms-blob-type": "BlockBlob",
-            "Content-Type": "application/json; charset=utf-8"
-          },
-          body: payload
+        const res = await fetch("/api/trees", {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify({
+            name,
+            tree: serializeTree(currentRoot)
+          })
         });
 
-        if (!res.ok) {
-          throw new Error(`Save failed (${res.status})`);
-        }
+        if (!res.ok) throw new Error(`Save failed (${res.status})`);
         await refreshCloudList();
       } catch (err) {
         setError(err.message || "Cloud save failed.");
@@ -1708,14 +1666,12 @@
     async function refreshCloudList() {
       clearError();
       try {
-        const cfg = requireBlobConfig();
-        persistBlobConfig();
-        const url = `${blobBaseUrl(cfg)}?restype=container&comp=list&${cfg.sas}`;
-        const res = await fetch(url);
+        const res = await fetch("/api/trees");
         if (!res.ok) throw new Error(`List failed (${res.status})`);
-        const xml = await res.text();
-        const doc = new DOMParser().parseFromString(xml, "application/xml");
-        const names = Array.from(doc.getElementsByTagName("Name")).map((n) => n.textContent).filter(Boolean);
+        const payload = await res.json();
+        const names = Array.isArray(payload.items)
+          ? payload.items.map((x) => x && x.name).filter((x) => typeof x === "string" && x.length > 0)
+          : [];
 
         const sel = document.getElementById("cloudTreeSelect");
         const current = sel.value;
@@ -1745,13 +1701,11 @@
       try {
         const selected = document.getElementById("cloudTreeSelect").value;
         if (!selected) throw new Error("Select a cloud tree first.");
-        const cfg = requireBlobConfig();
-        persistBlobConfig();
-        const url = `${blobBaseUrl(cfg)}/${encodeURIComponent(selected)}?${cfg.sas}`;
-        const res = await fetch(url);
+        const res = await fetch(`/api/trees/${encodeURIComponent(selected)}`);
         if (!res.ok) throw new Error(`Load failed (${res.status})`);
-        const text = await res.text();
-        document.getElementById("jsonInput").value = text;
+        const payload = await res.json();
+        const tree = payload && payload.tree ? payload.tree : payload;
+        document.getElementById("jsonInput").value = JSON.stringify(tree, null, 2);
         loadJsonTree();
       } catch (err) {
         setError(err.message || "Cloud load failed.");
@@ -1887,15 +1841,12 @@
       loadJsonTree();
     });
 
-    restoreBlobConfig();
     syncJsonFromTree();
     updateSelectedInfo();
     updateZoomInfo();
     updateVersionInfo();
     run(currentRoot, true);
-    if (document.getElementById("blobSas").value.trim()) {
-      refreshCloudList();
-    }
+    refreshCloudList();
 
     (function wireDragPan() {
       const viewport = document.getElementById("treeViewport");
