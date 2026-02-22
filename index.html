@@ -127,6 +127,88 @@
       flex-wrap: wrap;
     }
 
+    .cloud-shell {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.2fr) auto minmax(240px, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+      margin-top: 10px;
+    }
+
+    .cloud-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #3e5b71;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .cloud-field input,
+    .cloud-field select {
+      text-transform: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 9px 10px;
+      border: 1px solid #b8cad9;
+      border-radius: 10px;
+      background: #fff;
+      color: #123046;
+      min-height: 40px;
+    }
+
+    .cloud-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .cloud-panel button {
+      min-height: 40px;
+      padding: 0 14px;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+
+    #saveCloudBtn {
+      background: #0f766e;
+    }
+
+    #saveCloudBtn:hover {
+      background: #0b5f5d;
+    }
+
+    #refreshCloudBtn,
+    #loadCloudBtn {
+      background: #244364;
+    }
+
+    #refreshCloudBtn:hover,
+    #loadCloudBtn:hover {
+      background: #1d3753;
+    }
+
+    .cloud-select {
+      min-width: 220px;
+    }
+
+    @media (max-width: 980px) {
+      .cloud-shell {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .cloud-actions {
+        flex-wrap: wrap;
+      }
+    }
+
     .json-panel summary {
       cursor: pointer;
       font-weight: 600;
@@ -342,11 +424,15 @@
 
     <details id="cloudPanel" class="cloud-panel">
       <summary>Cloud Save and Load</summary>
-      <div class="row">
-        <label>Tree name <input id="cloudTreeName" type="text" placeholder="my-tree" /></label>
-        <button id="saveCloudBtn">Save to Cloud</button>
-        <button id="refreshCloudBtn">Refresh Cloud List</button>
-        <label>Cloud trees
+      <div class="cloud-shell">
+        <label class="cloud-field">Tree name
+          <input id="cloudTreeName" type="text" placeholder="my-tree" />
+        </label>
+        <div class="cloud-actions">
+          <button id="saveCloudBtn">Save to Cloud</button>
+          <button id="refreshCloudBtn">Refresh List</button>
+        </div>
+        <label class="cloud-field cloud-select">Cloud trees
           <select id="cloudTreeSelect">
             <option value="">(none)</option>
           </select>
@@ -1284,6 +1370,11 @@
       viewport.scrollTop = Math.max(0, preferredInitialScrollTop);
     }
 
+    function centerViewportHorizontalOnly() {
+      const viewport = document.getElementById("treeViewport");
+      viewport.scrollLeft = Math.max(0, preferredInitialScrollLeft);
+    }
+
     function run(root, recenter = false, recomputeLayout = true) {
       const xOffset = Number(document.getElementById("xOffset").value || 30);
       const yOffset = Number(document.getElementById("yOffset").value || 70);
@@ -1550,6 +1641,7 @@
       setExpandedRecursive(currentRoot, true);
       syncJsonFromTree();
       run(currentRoot, false, true);
+      window.requestAnimationFrame(centerViewportHorizontalOnly);
     }
 
     function collapseAll() {
@@ -1558,6 +1650,7 @@
       if (currentRoot) currentRoot.expanded = true;
       syncJsonFromTree();
       run(currentRoot, false, true);
+      window.requestAnimationFrame(centerViewportHorizontalOnly);
     }
 
     document.getElementById("rerun").addEventListener("click", rerenderCurrent);
