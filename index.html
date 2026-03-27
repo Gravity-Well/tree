@@ -407,6 +407,8 @@
           <button id="newTreeBtn" class="btn-primary">New Tree</button>
           <button id="loadSample">Load Sample</button>
           <button id="loadPackedSample">Load Packed</button>
+          <button id="loadTaxonomy" class="btn-subtle">Taxonomy</button>
+          <button id="loadLineage" class="btn-subtle">Human Lineage</button>
           <button id="cloudPanelToggleBtn" class="btn-cloud">Save/Load</button>
           <button id="importPanelToggleBtn" class="btn-subtle">Import</button>
         </div>
@@ -1889,6 +1891,149 @@
       const el = document.getElementById("azStatus");
       el.style.color = "#2f546f";
       el.textContent = 'Run: az account get-access-token --query accessToken -o tsv | clip — then paste above.';
+    });
+
+    /* ── Taxonomy Sample ── */
+
+    function taxonomyTreeJson() {
+      return JSON.stringify({
+        label: "Life",
+        children: [
+          { label: "Bacteria", children: [
+            { label: "Proteobacteria", children: [
+              { label: "Escherichia" }, { label: "Salmonella" }, { label: "Vibrio" }
+            ]},
+            { label: "Cyanobacteria", children: [
+              { label: "Nostoc" }, { label: "Anabaena" }
+            ]},
+            { label: "Firmicutes", children: [
+              { label: "Bacillus" }, { label: "Clostridium" }, { label: "Lactobacillus" }
+            ]}
+          ]},
+          { label: "Archaea", children: [
+            { label: "Euryarchaeota", children: [
+              { label: "Methanogens" }, { label: "Halophiles" }
+            ]},
+            { label: "Crenarchaeota", children: [
+              { label: "Sulfolobus" }, { label: "Thermoproteus" }
+            ]}
+          ]},
+          { label: "Eukarya", children: [
+            { label: "Plantae", children: [
+              { label: "Bryophyta\n(mosses)" },
+              { label: "Pteridophyta\n(ferns)" },
+              { label: "Gymnosperms", children: [
+                { label: "Conifers" }, { label: "Cycads" }
+              ]},
+              { label: "Angiosperms", children: [
+                { label: "Monocots" }, { label: "Eudicots" }
+              ]}
+            ]},
+            { label: "Fungi", children: [
+              { label: "Ascomycota\n(sac fungi)" },
+              { label: "Basidiomycota\n(club fungi)" },
+              { label: "Zygomycota" }
+            ]},
+            { label: "Animalia", children: [
+              { label: "Cnidaria\n(jellyfish)" },
+              { label: "Mollusca", children: [
+                { label: "Gastropoda" }, { label: "Cephalopoda" }
+              ]},
+              { label: "Arthropoda", children: [
+                { label: "Insecta" }, { label: "Arachnida" }, { label: "Crustacea" }
+              ]},
+              { label: "Chordata", children: [
+                { label: "Actinopterygii\n(ray-fin fish)" },
+                { label: "Amphibia" },
+                { label: "Reptilia", children: [
+                  { label: "Testudines\n(turtles)" },
+                  { label: "Squamata\n(lizards/snakes)" },
+                  { label: "Crocodilia" }
+                ]},
+                { label: "Aves\n(birds)" },
+                { label: "Mammalia", children: [
+                  { label: "Monotremata\n(platypus)" },
+                  { label: "Marsupialia\n(kangaroo)" },
+                  { label: "Placentalia", children: [
+                    { label: "Rodentia" },
+                    { label: "Carnivora" },
+                    { label: "Cetacea\n(whales)" },
+                    { label: "Primates", children: [
+                      { label: "Prosimians\n(lemurs)" },
+                      { label: "Anthropoidea", children: [
+                        { label: "New World\nMonkeys" },
+                        { label: "Old World\nMonkeys" },
+                        { label: "Hominoidea\n(apes)" }
+                      ]}
+                    ]}
+                  ]}
+                ]}
+              ]}
+            ]},
+            { label: "Protista", children: [
+              { label: "Amoebozoa" }, { label: "Alveolata" }, { label: "Euglenozoa" }
+            ]}
+          ]}
+        ]
+      }, null, 2);
+    }
+
+    /* ── Human Lineage Sample ── */
+
+    function humanLineageTreeJson() {
+      return JSON.stringify({
+        label: "Hominini\n~7 MYA",
+        children: [
+          { label: "Sahelanthropus\ntchadensis\n~7 MYA" },
+          { label: "Orrorin\ntugenensis\n~6 MYA" },
+          { label: "Ardipithecus", children: [
+            { label: "Ar. kadabba\n~5.5 MYA" },
+            { label: "Ar. ramidus\n~4.4 MYA" }
+          ]},
+          { label: "Australopithecus", children: [
+            { label: "Au. anamensis\n~4.2 MYA" },
+            { label: "Au. afarensis\n(Lucy)\n~3.5 MYA", children: [
+              { label: "Au. garhi\n~2.5 MYA" },
+              { label: "Au. africanus\n~3 MYA", children: [
+                { label: "Au. sediba\n~2 MYA" }
+              ]}
+            ]},
+            { label: "Paranthropus", children: [
+              { label: "P. aethiopicus\n~2.5 MYA" },
+              { label: "P. boisei\n~2.3 MYA" },
+              { label: "P. robustus\n~1.8 MYA" }
+            ]}
+          ]},
+          { label: "Early Homo", children: [
+            { label: "H. habilis\n~2.4 MYA" },
+            { label: "H. rudolfensis\n~1.9 MYA" },
+            { label: "H. erectus\n~1.9 MYA", children: [
+              { label: "H. antecessor\n~1.2 MYA" },
+              { label: "H. heidelberg.\n~700 KYA", children: [
+                { label: "H. neanderthal.\n~400 KYA" },
+                { label: "Denisovans\n~400 KYA" },
+                { label: "H. sapiens\n~300 KYA", children: [
+                  { label: "Anatomically\nModern Humans\n~200 KYA" },
+                  { label: "Behavioral\nModernity\n~50 KYA" }
+                ]}
+              ]}
+            ]},
+            { label: "H. naledi\n~335 KYA" },
+            { label: "H. floresiensis\n(Hobbit)\n~100 KYA" }
+          ]}
+        ]
+      }, null, 2);
+    }
+
+    document.getElementById("loadTaxonomy").addEventListener("click", () => {
+      clearError();
+      document.getElementById("jsonInput").value = taxonomyTreeJson();
+      loadJsonTree();
+    });
+    document.getElementById("loadLineage").addEventListener("click", () => {
+      clearError();
+      document.getElementById("jsonInput").value = humanLineageTreeJson();
+      loadJsonTree();
     });
 
     syncJsonFromTree();
