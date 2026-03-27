@@ -408,6 +408,7 @@
           <button id="loadSample">Load Sample</button>
           <button id="loadPackedSample">Load Packed</button>
           <button id="cloudPanelToggleBtn" class="btn-cloud">Save/Load</button>
+          <button id="importPanelToggleBtn" class="btn-subtle">Import</button>
         </div>
       </div>
       <div class="toolbar-secondary">
@@ -440,6 +441,53 @@
         <button id="loadCloudBtn">Load Selected</button>
       </div>
       <div id="error" class="error"></div>
+    </details>
+
+    <details id="importPanel" class="cloud-panel">
+      <summary>Import: GitHub Repo / Azure Resources</summary>
+
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;">
+        <!-- GitHub Repo Tree -->
+        <fieldset style="flex:1;min-width:280px;border:1px solid #c8d8e8;border-radius:10px;padding:12px;">
+          <legend style="font-weight:600;color:#25435b;font-size:13px;">GitHub Repository Tree</legend>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <label class="cloud-field">Owner / Repo
+              <input id="ghOwner" type="text" placeholder="microsoft/vscode" style="text-transform:none;" />
+            </label>
+            <label class="cloud-field">Branch (optional)
+              <input id="ghBranch" type="text" placeholder="main" style="text-transform:none;" />
+            </label>
+            <label class="cloud-field">Max depth
+              <input id="ghDepth" type="number" min="1" max="10" value="3" style="width:70px;" />
+            </label>
+            <label style="font-size:12px;color:#3e5b71;display:flex;align-items:center;gap:6px;">
+              <input id="ghFoldersOnly" type="checkbox" /> Folders only
+            </label>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <button id="ghImportBtn" style="background:#24292f;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;">Import from GitHub</button>
+            </div>
+            <div id="ghStatus" class="error"></div>
+          </div>
+        </fieldset>
+
+        <!-- Azure Resource Group -->
+        <fieldset style="flex:1;min-width:280px;border:1px solid #c8d8e8;border-radius:10px;padding:12px;">
+          <legend style="font-weight:600;color:#25435b;font-size:13px;">Azure Resource Hierarchy</legend>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <label class="cloud-field">Subscription ID
+              <input id="azSubId" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="text-transform:none;" />
+            </label>
+            <label class="cloud-field">Bearer Token
+              <input id="azToken" type="password" placeholder="paste az account get-access-token output" style="text-transform:none;" />
+            </label>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <button id="azImportBtn" style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;">Import from Azure</button>
+              <button id="azTokenHelpBtn" style="background:#5c5c5c;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:12px;">How to get token?</button>
+            </div>
+            <div id="azStatus" class="error"></div>
+          </div>
+        </fieldset>
+      </div>
     </details>
 
     <details class="json-panel">
@@ -1659,6 +1707,10 @@
       const panel = document.getElementById("cloudPanel");
       panel.open = !panel.open;
     });
+    document.getElementById("importPanelToggleBtn").addEventListener("click", () => {
+      const panel = document.getElementById("importPanel");
+      panel.open = !panel.open;
+    });
     document.getElementById("expandAllBtn").addEventListener("click", expandAll);
     document.getElementById("collapseAllBtn").addEventListener("click", collapseAll);
     document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomScale + zoomStep));
@@ -1680,6 +1732,163 @@
       clearError();
       document.getElementById("jsonInput").value = packedTreeJson();
       loadJsonTree();
+    });
+
+    /* ── GitHub Repo Tree Connector ── */
+
+    async function importGitHubRepo() {
+      const statusEl = document.getElementById("ghStatus");
+      statusEl.textContent = "";
+      try {
+        const raw = (document.getElementById("ghOwner").value || "").trim();
+        if (!raw || !raw.includes("/")) throw new Error("Enter owner/repo (e.g. microsoft/vscode).");
+        const [owner, repo] = raw.split("/", 2);
+        const branch = (document.getElementById("ghBranch").value || "").trim() || "HEAD";
+        const maxDepth = Math.max(1, Math.min(10, Number(document.getElementById("ghDepth").value) || 3));
+        const foldersOnly = document.getElementById("ghFoldersOnly").checked;
+
+        statusEl.textContent = "Fetching repo tree…";
+        statusEl.style.color = "#2f546f";
+
+        const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
+        const res = await fetch(url, { headers: { "Accept": "application/vnd.github+json" } });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || `GitHub API returned ${res.status}`);
+        }
+        const data = await res.json();
+        const items = (data.tree || []).filter(item => foldersOnly ? item.type === "tree" : true);
+
+        const rootJson = { label: `${owner}/${repo}`, children: [] };
+        const dirMap = { "": rootJson };
+
+        function ensureDir(pathParts) {
+          let current = "";
+          let parentJson = rootJson;
+          for (const part of pathParts) {
+            const full = current ? current + "/" + part : part;
+            if (!dirMap[full]) {
+              const node = { label: part, children: [] };
+              parentJson.children.push(node);
+              dirMap[full] = node;
+            }
+            parentJson = dirMap[full];
+            current = full;
+          }
+          return parentJson;
+        }
+
+        for (const item of items) {
+          const parts = item.path.split("/");
+          if (parts.length > maxDepth) continue;
+          if (item.type === "tree") {
+            ensureDir(parts);
+          } else {
+            const dirParts = parts.slice(0, -1);
+            const fileName = parts[parts.length - 1];
+            const parent = ensureDir(dirParts);
+            parent.children.push({ label: fileName });
+          }
+        }
+
+        function cleanEmpty(node) {
+          if (node.children && node.children.length === 0) delete node.children;
+          if (node.children) node.children.forEach(cleanEmpty);
+        }
+        cleanEmpty(rootJson);
+
+        document.getElementById("jsonInput").value = JSON.stringify(rootJson, null, 2);
+        currentRoot = buildTreeFromJsonNode(rootJson, null);
+        selectedNode = currentRoot;
+        updateSelectedInfo();
+        run(currentRoot, true);
+
+        const nodeCount = flatten(currentRoot).length;
+        statusEl.textContent = `Imported ${nodeCount} nodes from ${owner}/${repo}.`;
+        statusEl.style.color = "#0f766e";
+      } catch (err) {
+        statusEl.textContent = err.message || "GitHub import failed.";
+        statusEl.style.color = "#a61b1b";
+      }
+    }
+
+    /* ── Azure Resource Hierarchy Connector ── */
+
+    async function importAzureResources() {
+      const statusEl = document.getElementById("azStatus");
+      statusEl.textContent = "";
+      try {
+        const subId = (document.getElementById("azSubId").value || "").trim();
+        const token = (document.getElementById("azToken").value || "").trim();
+        if (!subId) throw new Error("Enter your Azure Subscription ID.");
+        if (!token) throw new Error("Paste a Bearer token (see help).");
+
+        statusEl.textContent = "Fetching Azure resources…";
+        statusEl.style.color = "#2f546f";
+
+        const url = `https://management.azure.com/subscriptions/${encodeURIComponent(subId)}/resources?api-version=2021-04-01`;
+        const res = await fetch(url, {
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error?.message || `Azure API returned ${res.status}`);
+        }
+        const data = await res.json();
+        const resources = data.value || [];
+
+        const rootJson = { label: `Subscription\n${subId.slice(0, 8)}…`, children: [] };
+        const rgMap = {};
+
+        for (const r of resources) {
+          const idParts = (r.id || "").split("/");
+          const rgIdx = idParts.findIndex(p => p.toLowerCase() === "resourcegroups");
+          const rgName = rgIdx >= 0 && rgIdx + 1 < idParts.length ? idParts[rgIdx + 1] : "(unknown)";
+          const typeParts = (r.type || "").split("/");
+          const shortType = typeParts.length > 1 ? typeParts.slice(1).join("/") : r.type;
+
+          if (!rgMap[rgName]) {
+            const rgNode = { label: rgName, children: [] };
+            rgMap[rgName] = { node: rgNode, types: {} };
+            rootJson.children.push(rgNode);
+          }
+
+          const rg = rgMap[rgName];
+          if (!rg.types[shortType]) {
+            const typeNode = { label: shortType, children: [] };
+            rg.types[shortType] = typeNode;
+            rg.node.children.push(typeNode);
+          }
+
+          rg.types[shortType].children.push({ label: r.name || "(unnamed)" });
+        }
+
+        rootJson.children.sort((a, b) => a.label.localeCompare(b.label));
+        for (const rg of Object.values(rgMap)) {
+          rg.node.children.sort((a, b) => a.label.localeCompare(b.label));
+        }
+
+        document.getElementById("jsonInput").value = JSON.stringify(rootJson, null, 2);
+        currentRoot = buildTreeFromJsonNode(rootJson, null);
+        selectedNode = currentRoot;
+        updateSelectedInfo();
+        run(currentRoot, true);
+
+        const nodeCount = flatten(currentRoot).length;
+        statusEl.textContent = `Imported ${nodeCount} nodes (${resources.length} resources across ${Object.keys(rgMap).length} resource groups).`;
+        statusEl.style.color = "#0f766e";
+      } catch (err) {
+        statusEl.textContent = err.message || "Azure import failed.";
+        statusEl.style.color = "#a61b1b";
+      }
+    }
+
+    document.getElementById("ghImportBtn").addEventListener("click", importGitHubRepo);
+    document.getElementById("azImportBtn").addEventListener("click", importAzureResources);
+    document.getElementById("azTokenHelpBtn").addEventListener("click", () => {
+      const el = document.getElementById("azStatus");
+      el.style.color = "#2f546f";
+      el.textContent = 'Run: az account get-access-token --query accessToken -o tsv | clip — then paste above.';
     });
 
     syncJsonFromTree();
