@@ -416,6 +416,8 @@
       <div class="toolbar-secondary">
         <button id="expandAllBtn" class="btn-subtle">Expand All</button>
         <button id="collapseAllBtn" class="btn-subtle">Collapse All</button>
+        <button id="expandLevelBtn" class="btn-subtle">Expand +1</button>
+        <button id="collapseLevelBtn" class="btn-subtle">Collapse -1</button>
         <button id="zoomOutBtn" class="btn-subtle">-</button>
         <button id="zoomInBtn" class="btn-subtle">+</button>
         <button id="zoomResetBtn" class="btn-subtle">100%</button>
@@ -1703,6 +1705,63 @@
       window.requestAnimationFrame(centerViewportHorizontalOnly);
     }
 
+    function getMaxVisibleDepth(node, depth) {
+      if (!node) return depth;
+      if (!hasChildren(node) || node.expanded === false) return depth;
+      let max = depth;
+      for (const child of node.children) {
+        max = Math.max(max, getMaxVisibleDepth(child, depth + 1));
+      }
+      return max;
+    }
+
+    function expandOneLevel() {
+      clearError();
+      const maxVisible = getMaxVisibleDepth(currentRoot, 0);
+      // Find collapsed nodes at exactly maxVisible depth and expand them
+      let expanded = false;
+      function walk(node, depth) {
+        if (!node || !hasChildren(node)) return;
+        if (node.expanded === false && depth <= maxVisible) {
+          node.expanded = true;
+          expanded = true;
+          return; // don't recurse deeper on this pass
+        }
+        if (node.expanded !== false) {
+          for (const child of node.children) walk(child, depth + 1);
+        }
+      }
+      walk(currentRoot, 0);
+      if (!expanded) {
+        // All nodes already expanded — nothing to do
+        return;
+      }
+      syncJsonFromTree();
+      run(currentRoot, false, true);
+      window.requestAnimationFrame(centerViewportHorizontalOnly);
+    }
+
+    function collapseOneLevel() {
+      clearError();
+      const maxVisible = getMaxVisibleDepth(currentRoot, 0);
+      if (maxVisible <= 0) return; // root only, nothing to collapse
+      // Collapse nodes at the deepest visible level that have children
+      function walk(node, depth) {
+        if (!node || !hasChildren(node)) return;
+        if (node.expanded !== false) {
+          if (depth === maxVisible - 1) {
+            node.expanded = false;
+          } else {
+            for (const child of node.children) walk(child, depth + 1);
+          }
+        }
+      }
+      walk(currentRoot, 0);
+      syncJsonFromTree();
+      run(currentRoot, false, true);
+      window.requestAnimationFrame(centerViewportHorizontalOnly);
+    }
+
     document.getElementById("rerun").addEventListener("click", rerenderCurrent);
     document.getElementById("newTreeBtn").addEventListener("click", newTree);
     document.getElementById("cloudPanelToggleBtn").addEventListener("click", () => {
@@ -1715,6 +1774,8 @@
     });
     document.getElementById("expandAllBtn").addEventListener("click", expandAll);
     document.getElementById("collapseAllBtn").addEventListener("click", collapseAll);
+    document.getElementById("expandLevelBtn").addEventListener("click", expandOneLevel);
+    document.getElementById("collapseLevelBtn").addEventListener("click", collapseOneLevel);
     document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomScale + zoomStep));
     document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomScale - zoomStep));
     document.getElementById("zoomResetBtn").addEventListener("click", () => setZoom(1));
